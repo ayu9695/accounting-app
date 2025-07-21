@@ -3,7 +3,6 @@ const { Schema } = mongoose;
 
 const VendorSchema = new mongoose.Schema({
     tenantId: { type: Schema.Types.ObjectId, required: true, ref: 'Tenant' },
-    billNumber: {type: String, required: true },
     name: { type: String, required: true },
     gstin: { type: Number },
     state: { type: String },
@@ -11,6 +10,7 @@ const VendorSchema = new mongoose.Schema({
     pincode: { type: String },
     email: { type: String, required: true },
     phone: { type: String },
+    extension: { type: String, default: '+91' },
     pannumber: { type: String },
     address: { type: String },
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },

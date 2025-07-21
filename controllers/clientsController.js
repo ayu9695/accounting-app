@@ -81,7 +81,9 @@ exports.createClient = async (req, res) => {
 
     const existingClient = await Client.findOne({ tenantId, name: newClientData.name });
     if (existingClient){
+      console.log("Existing client.");
     if (existingClient.isActive) {
+      console.log("Existing Active client, sending error");
       return res.status(400).json({ error: 'Client with this name already exists in this tenant' });
     } else if(!existingClient.isActive) {
       existingClient.isActive=true;

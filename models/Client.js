@@ -12,6 +12,7 @@ const ClientSchema = new mongoose.Schema({
   pincode: { type: String },
   email: { type: String, required: true },
   phone: { type: String },
+  extension: { type: String, default: '+91' },
   pannumber: { type: String },
   address: { type: String },
   createdAt: { type: Date, default: Date.now },

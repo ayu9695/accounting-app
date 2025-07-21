@@ -92,8 +92,7 @@ exports.createVendor = async (req, res) => {
       tenantId,
       $or: [
         { email: newVendorData.email },
-        { name: newVendorData.name },
-        { billNumber: newVendorData.billNumber }
+        { name: newVendorData.name }
       ]
     });
 
