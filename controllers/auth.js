@@ -4,6 +4,7 @@ const User = require('../models/Users'); // adjust path
 
 exports.login = async (req, res) => {
     const { email, password } = req.body;
+    console.log("Login request received");
     try{
         const user = await User.findOne({ email }).select('+password');
     if (!user)
