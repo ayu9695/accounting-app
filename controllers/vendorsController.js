@@ -38,7 +38,7 @@ exports.getVendorContacts = async (req, res) => {
       { tenantId },
       'name email contactPerson'
     );
-    console.log("Vendor contacts fetched : ", vendors);
+    // console.log("Vendor contacts fetched : ", vendors);
     res.json(vendors);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch vendors' });
@@ -196,9 +196,19 @@ exports.addVendorContact = async (req, res) => {
     if (!vendor) {
       return res.status(404).json({ error: 'Vendor not found' });
     }
-    console.log("Contact body : ", contacts);
-    console.log('Final contacts being pushed:', enrichedContacts);
+    const existingEmails = vendor.contactPerson.map(p => p.email?.toLowerCase());
+    const existingPhones = vendor.contactPerson.map(p => p.phone);
 
+    for (const contact of enrichedContacts) {
+      const emailExists = existingEmails.includes(contact.email?.toLowerCase());
+      const phoneExists = contact.phone && existingPhones.includes(contact.phone);
+
+      if (emailExists || phoneExists) {
+        return res.status(409).json({
+          error: `Contact with email "${contact.email}" or phone "${contact.phone}" already exists.`,
+        });
+      }
+    }
       vendor.contactPerson.push(...enrichedContacts);
       await vendor.save(); // this enforces schema validation
 

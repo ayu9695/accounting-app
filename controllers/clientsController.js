@@ -23,6 +23,70 @@ exports.getAllClients = async (req, res) => {
   }
 };
 
+exports.addClientContact = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const createdBy = req.user.userId;
+    const clientId = req.params.id;
+    // Step 1: Normalize incoming structure
+    let incoming = req.body;
+
+    // Example incoming = [ { contactPerson: [ {...}, {...} ] } ]
+    let contacts = [];
+
+    // Flatten and extract actual contactPerson objects
+    for (const entry of Array.isArray(incoming) ? incoming : [incoming]) {
+      if (Array.isArray(entry.contactPerson)) {
+        contacts.push(...entry.contactPerson);
+      }
+    }
+
+    // Step 2: Enrich and validate
+    const enrichedContacts = contacts
+      .filter(c => c && c.name && c.email) // skip incomplete
+      .map(c => ({
+        ...c,
+        createdBy,
+        createdAt: new Date(),
+      }));
+
+    if (!enrichedContacts.length) {
+      return res.status(400).json({ error: 'No valid contacts provided (must have name & email).' });
+    }
+
+    const client = await Client.findOne({ _id: clientId, tenantId });
+
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    console.log("Contact body : ", contacts);
+    console.log('Final contacts being pushed:', enrichedContacts);
+    const existingEmails = client.contactPerson.map(p => p.email?.toLowerCase());
+    const existingPhones = client.contactPerson.map(p => p.phone);
+    for (const contact of enrichedContacts) {
+      const emailExists = existingEmails.includes(contact.email?.toLowerCase());
+      const phoneExists = contact.phone && existingPhones.includes(contact.phone);
+
+      if (emailExists || phoneExists) {
+        return res.status(409).json({
+          error: `Contact with email "${contact.email}" or phone "${contact.phone}" already exists.`,
+        });
+      }
+    }
+
+      client.contactPerson.push(...enrichedContacts);
+      await client.save(); // this enforces schema validation
+
+    res.status(200).json({
+      message: `${enrichedContacts.length} contact(s) added successfully`,
+      client: client
+    });
+  } catch (error) {
+    console.error('Error adding contact to client:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 exports.getClientContacts = async (req, res) => {
   try {
     const tenantId = req.user.tenantId; // Set by your authMiddleware ✅
@@ -35,7 +99,7 @@ exports.getClientContacts = async (req, res) => {
       { tenantId },
       'name email contactPerson'
     );
-    console.log("client contacts fetched : ", clients);
+    // console.log("client contacts fetched : ", clients);
     res.json(clients);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch clients' });
