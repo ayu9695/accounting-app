@@ -17,7 +17,7 @@ router.post('/vendors', authMiddleware, vendorsController.createVendor);
 
 // Update vendor by ID
 router.put('/vendors/:id', authMiddleware, vendorsController.updateVendor);
-router.put('/vendor-contacts/:id', authMiddleware, vendorsController.addVendorContact);
+router.post('/vendor-contacts/:id', authMiddleware, vendorsController.addVendorContact);
 
 // Soft-delete vendor by ID
 router.delete('/vendors/:id', authMiddleware, vendorsController.deleteVendor);

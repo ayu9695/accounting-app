@@ -13,6 +13,7 @@ router.get('/clients-with-contacts', authMiddleware, clientsController.getClient
 
 router.post('/clients', authMiddleware, clientsController.createClient);
 router.post('clients/:id/contacts', authMiddleware, clientsController.updateClientContact);
+router.post('/client-contacts/:id', authMiddleware, clientsController.addClientContact);
 
 // Update client by ID
 router.put('/clients/:name', authMiddleware, clientsController.updateClient);

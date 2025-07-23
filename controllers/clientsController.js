@@ -156,6 +156,23 @@ exports.createClient = async (req, res) => {
     }
   }
 
+  if (Array.isArray(newClientData.contactPerson)) {
+    console.log("in array");
+  const validContacts = newClientData.contactPerson.filter(
+    (person) => person?.email && person.email.trim() !== ''
+  );
+
+  if (validContacts.length > 0) {
+    console.log("setting contacts");
+    newClientData.contactPerson = validContacts;
+  } else {
+    console.log("deleting array");
+    delete newClientData.contactPerson;  // ✅ prevents Mongo from inserting null
+  }
+}
+
+console.log('Final sanitized client data:', newClientData);
+
     const newClient = new Client(newClientData);
     await newClient.save();
 

@@ -3,7 +3,7 @@ const { Schema } = mongoose;
 
 const ClientSchema = new mongoose.Schema({
   tenantId: { type: Schema.Types.ObjectId, required: true, ref: 'Tenant' },
-  name: { type: String, unique: true, required: true },
+  name: { type: String, required: true },
   gstin: { type: String },
   website: { type: String },
   industry: { type: String },
@@ -22,11 +22,11 @@ const ClientSchema = new mongoose.Schema({
   overdues: { type: Number, default: 0 },
   contactPerson: [{
     name: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
+    email: { type: String, required: true},
     phone: { type: String, required: false },
     extension: {type: String, required: false },
     status: {type: Boolean, required: false, default:true },
-    position: {type: String, required: false }
+    position: {type: String, required: false },
   }],
   notes: {type: String},
   isActive: {type: Boolean},
