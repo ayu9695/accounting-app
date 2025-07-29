@@ -29,3 +29,49 @@ exports.createDepartment = async (req, res) => {
   }
 };
 
+exports.updateDepartment = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const departmentId = req.params.id;
+
+    const department = await Department.findOne({ _id: departmentId, tenantId });
+    if (!department) return res.status(404).json({ error: 'department not found' });
+    console.log("department requested to update: ", department.name);
+
+    const updates = req.body;
+    const updateHistory = [];
+
+    Object.keys(updates).forEach((key) => {
+      if (department[key] !== updates[key]) {
+        updateHistory.push({
+          attribute: key,
+          oldValue: department[key],
+          newValue: updates[key],
+          updatedAt: new Date(),
+          updatedBy: req.user.userId
+        });
+        department[key] = updates[key];
+      }
+    });
+
+    await department.save();
+    return res.json(department);
+  } catch (error) {
+    console.error('Error updating department:', error);
+    return res.status(500).json({ error: 'Server error updating department' });
+  }
+};
+
+exports.deleteDepartment = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const departmentId = req.params.id;
+    const department = await Department.findOneAndDelete({ _id: departmentId, tenantId });
+    if (!department) return res.status(404).json({ error: 'department not found' });
+    return res.json({ message: 'department deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting department:', error);
+    return res.status(500).json({ error: 'Server error deleting department' });
+  }
+};
+

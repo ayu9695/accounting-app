@@ -222,9 +222,9 @@ exports.toggleUserStatus = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const userEmail = req.body.email;
+    const userId = req.params.id;
 
-    const user = await User.findOne({ email: userEmail, tenantId });
+    const user = await User.findOne({ _id: userId, tenantId });
     if (!user) return res.status(404).json({ error: 'User not found' });
     console.log("User requested to update: ", user.name);
 

@@ -24,7 +24,7 @@ router.post('/users/toggle-status', userController.toggleUserStatus);
 
 
 // Update user by ID
-router.put('/user', authMiddleware, userController.updateUser);
+router.put('/user/:id', authMiddleware, userController.updateUser);
 
 // Delete user by ID
 router.delete('/admin/user', authMiddleware, userController.deleteUser);

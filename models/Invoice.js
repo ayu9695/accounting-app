@@ -6,6 +6,7 @@ const InvoiceSchema = new mongoose.Schema({
     invoiceNumber: {type: String, unique:true, required:true},
     clientId: {type: Schema.Types.ObjectId, required: true, ref: 'Client'},
     clientName: { type: String, required: true },
+    department: { type: Schema.Types.ObjectId, ref: 'Department'}, // updated to reference Department
     issueDate:{ type: Date},
     dueDate: {type: Date},
     hsnCode: {type: String},
