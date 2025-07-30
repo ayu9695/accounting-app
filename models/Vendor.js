@@ -4,6 +4,7 @@ const { Schema } = mongoose;
 const VendorSchema = new mongoose.Schema({
     tenantId: { type: Schema.Types.ObjectId, required: true, ref: 'Tenant' },
     name: { type: String, required: true },
+    department: { type: Schema.Types.ObjectId, ref: 'Department'}, // updated to reference Department
     gstin: { type: Number },
     state: { type: String },
     city: { type: String },
