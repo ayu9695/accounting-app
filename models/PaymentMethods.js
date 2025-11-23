@@ -1,0 +1,21 @@
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
+
+const PaymentMethodsSchema = new Schema({
+  tenantId: { type: Schema.Types.ObjectId, required: true, ref: 'Tenant' },
+  code: {type: String, required: true},
+  name: {type: String, required: true},
+  description : {type: String},
+  createdBy: {type: Schema.Types.ObjectId, ref: 'User'},
+  updateHistory: [{
+    attribute: { type: String, required: true },
+    oldValue: { type: Schema.Types.Mixed },
+    newValue: { type: Schema.Types.Mixed },
+    updatedAt: { type: Date, default: Date.now },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User' }
+  }]
+})
+
+PaymentMethodsSchema.index({tenantId: 1, name: 1}, { unique: true });
+
+module.exports = mongoose.model('PaymentMethod', PaymentMethodsSchema);

@@ -1,12 +1,26 @@
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 const bcrypt = require('bcrypt');
+/*
+[{
+  "tenantId": {
+    "$oid": "691f248c853d3110a178da39"
+  },
+  "email": "atul@witarist.com",
+  "name": "Atul",
+  "code": 1001,
+  "role": "superadmin",
+  "isActive": true,
+  "country": "India",
+  "password": "$2b$10$cGGScFAeAF85e/s27bZwBOlphR72k/O..eg2SEl8s9h/FrkaJdg3y"
+}]
 
+*/
 const UserSchema = new mongoose.Schema({
     tenantId: { type: Schema.Types.ObjectId, required: true, ref: 'Tenant' },
-    email: { type: String, unique: true, required: true },
+    email: { type: String, required: true },
     name: { type: String, required: true},
-    code: { type: Number, unique: true},
+    code: { type: Number },
     role: { type: String, enum: ['superadmin', 'admin', "team_member"], required: true},
     avatar:{type: String},
     phone:{type: String},

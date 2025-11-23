@@ -17,13 +17,17 @@ const SettingsSchema = new Schema({
     sgst: { type: Number, default: 0 },
     igst: { type: Number, default: 0 }
   },
+  defaultTdsRate: { type: Number, default: 0 },
   phone: { type: String },
   address: { type: String },
   invoicePrefix: { type: String },
   expenseCategories: [String],
-  paymentMethods: [String],
+paymentMethod: { 
+    type: String, 
+    enum: ['bank_transfer', 'cheque', 'cash', 'upi', 'credit_card','debit_card', 'other'] 
+  },
   createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date},
   updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   updateHistory: [{
   attribute: { type: String, required: true },

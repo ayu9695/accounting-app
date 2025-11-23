@@ -1,11 +1,29 @@
 const Expense = require('../models/Expense');
+const User = require('../models/Users');
+const PaymentMethod = require('../models/PaymentMethods');
 
 // GET /api/expenses
 exports.getAllExpenses = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
+    const userId = req.user.userId;
     const expenses = await Expense.find({ tenantId }).sort({ expenseDate: -1 });
-    return res.json(expenses);
+    const user = await User.findOne({ _id: userId, tenantId });
+
+    const transformedExpenses = expenses.map(expense => ({
+      id : expense._id.toString(),
+      category : expense.category.toString(),
+      amount: expense.amount,
+      // paymentMethod: expense.paymentMethod.toString(),
+      paymentStatus: expense.paymentStatus,
+      approvalStatus: expense.approvalStatus,
+      expenseDate: expense.expenseDate,
+      description: expense.description,
+      createdBy: user.name,
+      createdAt: expense.createdAt,
+      updatedAt: expense.updatedAt,
+    }));
+    return res.json(transformedExpenses);
   } catch (error) {
     console.error('Error fetching expenses:', error);
     return res.status(500).json({ error: 'Server error fetching expenses' });
@@ -19,7 +37,23 @@ exports.getExpenseById = async (req, res) => {
     const expenseId = req.params.id;
     const expense = await Expense.findOne({ _id: expenseId, tenantId });
     if (!expense) return res.status(404).json({ error: 'Expense not found' });
-    return res.json(expense);
+    const user = await User.findOne({ _id: expense.createdBy, tenantId });
+    const paymentMethod = await PaymentMethod.findOne({_id: expense.paymentMethod, tenantId});
+
+    const transformedExpenses = {
+      id : expense._id.toString(),
+      category : expense.category.toString(),
+      amount: expense.amount,
+      paymentMethod: paymentMethod.name,
+      paymentStatus: expense.paymentStatus,
+      approvalStatus: expense.approvalStatus,
+      expenseDate: expense.expenseDate,
+      description: expense.description,
+      createdBy: user.name,
+      createdAt: expense.createdAt,
+      updatedAt: expense.updatedAt,
+    };
+    return res.json(transformedExpenses);
   } catch (error) {
     console.error('Error fetching expense:', error);
     return res.status(500).json({ error: 'Server error fetching expense' });
@@ -35,13 +69,29 @@ exports.createExpense = async (req, res) => {
     const expenseData = {
       ...req.body,
       tenantId,
-      createdBy
+      createdBy,
+      expenseDate: new Date(req.body.date)
     };
 
     const expense = new Expense(expenseData);
+    console.log("Creating expense : ", expense, " from data received : ", expenseData);
     await expense.save();
+    const user = await User.findOne({ _id: req.user.userId, tenantId });
 
-    return res.status(201).json(expense);
+    const transformedExpenses = expenses.map(expense => ({
+      id : expense._id.toString(),
+      category : expense.category.toString(),
+      amount: expense.amount,
+      paymentMethod: expense.paymentMethod.toString(),
+      paymentStatus: expense.paymentStatus,
+      approvalStatus: expense.approvalStatus,
+      expenseDate: expense.expenseDate,
+      description: expense.description,
+      createdBy: user.name,
+      createdAt: expense.createdAt,
+      updatedAt: expense.updatedAt,
+    }));
+    return res.status(201).json(transformedExpenses);
   } catch (error) {
     console.error('Error creating expense:', error);
     return res.status(500).json({ error: 'Server error creating expense' });
@@ -69,17 +119,37 @@ exports.updateExpense = async (req, res) => {
           updatedAt: new Date(),
           updatedBy: req.user.userId
         });
-        expense[key] = updates[key];
+          console.log("updates key : ", updates[key], " updates values : ", updates, "expense : ", expense[key]);
+          expense[key] = updates[key];
+        if (updates.paymentDate) {
+          expense.paymentDate = new Date(updates.paymentDate);
+        } 
       }
     });
 
     if (updateHistory.length > 0) {
       expense.updateHistory.push(...updateHistory);
     }
+    console.log("saving expense : ", expense);
 
     await expense.save();
 
-    return res.json(expense);
+    // const user = await User.findOne({ _id: userId, tenantId });
+
+    const transformedExpenses = {
+      id : expense._id.toString(),
+      category : expense.category.toString(),
+      amount: expense.amount,
+      paymentMethod: expense.paymentMethod.toString(),
+      paymentStatus: expense.paymentStatus,
+      approvalStatus: expense.approvalStatus,
+      date: expense.expenseDate,
+      description: expense.description,
+      // createdBy: user.name,
+      createdAt: expense.createdAt,
+      updatedAt: expense.updatedAt,
+    };
+    return res.status(201).json(transformedExpenses);
   } catch (error) {
     console.error('Error updating expense:', error);
     return res.status(500).json({ error: 'Server error updating expense' });

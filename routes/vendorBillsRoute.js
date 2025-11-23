@@ -3,6 +3,7 @@ const router = express.Router();
 const VendorBill = require('../models/VendorBill');
 const Vendor = require('../models/Vendor');
 const authMiddleware = require('../middleware/auth');
+const { now } = require('mongoose');
 
 // Apply authentication and tenant validation to all routes
 router.use(authMiddleware);
@@ -25,6 +26,8 @@ router.get('/vendor-bills', async (req, res) => {
 
     // Build query
     let query = { tenantId };
+
+    query.archive = { $ne: true };
     
     // Add filters
     if (status) {
@@ -78,21 +81,26 @@ router.get('/vendor-bills', async (req, res) => {
       dueDate: bill.dueDate,
       uploadDate: bill.createdAt,
       totalAmount: bill.total || bill.amount,
+      amount: bill.amount,
       taxableAmount: bill.amount,
-      cgst: bill.tax / 2 || 0,
-      sgst: bill.tax / 2 || 0,
+      cgst: bill.cgst,
+      sgst: bill.sgst,
       igst: 0,
       tdsAmount: bill.tdsAmount,
       tdsRate: bill.tdsRate,
       payableAmount: bill.payableAmount,
       status: bill.status === 'unpaid' ? 'pending' : bill.status,
+      paymentStatus: bill.paymentStatus,
       description: bill.notes || '',
       fileName: bill.attachments?.[0]?.name || '',
-      paymentDate: bill.status === 'paid' ? bill.updatedAt : null,
-      paymentMethod: null,
-      paymentReference: null,
+      paymentDate: bill.paymentDate,
+      pendingAmount: bill.pendingAmount,
+      paymentMethod: bill.paymentMethod,
+      paymentReference: bill.paymentReference,
       attachments: bill.attachments || []
     }));
+
+    console.log("returning : ", transformedBills);
 
     res.json({
       success: true,
@@ -142,22 +150,25 @@ router.get('/vendor-bills/:id', async (req, res) => {
       dueDate: vendorBill.dueDate,
       uploadDate: vendorBill.createdAt,
       totalAmount: vendorBill.total || vendorBill.amount,
+      amount: vendorBill.amount,
       taxableAmount: vendorBill.amount,
-      cgst: vendorBill.tax / 2 || 0,
-      sgst: vendorBill.tax / 2 || 0,
+      cgst: vendorBill.cgst,
+      sgst: vendorBill.sgst,
       igst: 0,
-      tdsRate: 0,
-      tdsAmount: 0,
-      payableAmount: vendorBill.total || vendorBill.amount,
+      tdsAmount: vendorBill.tdsAmount,
+      tdsRate: vendorBill.tdsRate,
+      payableAmount: vendorBill.payableAmount,
       status: vendorBill.status === 'unpaid' ? 'pending' : vendorBill.status,
+      paymentStatus: vendorBill.paymentStatus,
       description: vendorBill.notes || '',
       fileName: vendorBill.attachments?.[0]?.name || '',
-      paymentDate: vendorBill.status === 'paid' ? vendorBill.updatedAt : null,
-      paymentMethod: null,
-      paymentReference: null,
-      attachments: vendorBill.attachments || [],
-      vendor: vendorBill.vendorId
+      paymentDate: vendorBill.paymentDate,
+      pendingAmount: vendorBill.pendingAmount,
+      paymentMethod: vendorBill.paymentMethod,
+      paymentReference: vendorBill.paymentReference,
+      attachments: vendorBill.attachments || []
     };
+    console.log ("transformed bill: ", transformedBill);
 
     res.json({
       success: true,
@@ -235,30 +246,35 @@ router.post('/vendor-bills', async (req, res) => {
     });
         console.log("taxable: ", amount, " tds: ", tdsRate);
 
-
     await vendorBill.save();
 
     // Transform response
     const transformedBill = {
       _id: vendorBill._id.toString(),
-      vendorId: vendorBill.vendorId.toString(),
-      vendorName: vendorBill.vendorName,
+      vendorId: vendorBill.vendorId?._id?.toString() || vendorBill.vendorId,
+      vendorName: vendorBill.vendorName || vendorBill.vendorId?.name,
       billNumber: vendorBill.billNumber,
       billDate: vendorBill.billDate,
       dueDate: vendorBill.dueDate,
       uploadDate: vendorBill.createdAt,
-      totalAmount: vendorBill.total,
+      totalAmount: vendorBill.total || vendorBill.amount,
+      amount: vendorBill.amount,
       taxableAmount: vendorBill.amount,
-      cgst: vendorBill.tax / 2,
-      sgst: vendorBill.tax / 2,
+      cgst: vendorBill.cgst,
+      sgst: vendorBill.sgst,
       igst: 0,
-      tdsRate: 0,
-      tdsAmount: 0,
-      payableAmount: vendorBill.total,
-      status: 'pending',
+      tdsAmount: vendorBill.tdsAmount,
+      tdsRate: vendorBill.tdsRate,
+      payableAmount: vendorBill.payableAmount,
+      status: vendorBill.status === 'unpaid' ? 'pending' : vendorBill.status,
+      paymentStatus: vendorBill.paymentStatus,
       description: vendorBill.notes || '',
       fileName: vendorBill.attachments?.[0]?.name || '',
-      attachments: vendorBill.attachments
+      paymentDate: vendorBill.paymentDate,
+      pendingAmount: vendorBill.pendingAmount,
+      paymentMethod: vendorBill.paymentMethod,
+      paymentReference: vendorBill.paymentReference,
+      attachments: vendorBill.attachments || []
     };
 
     res.status(201).json({
@@ -280,13 +296,14 @@ router.post('/vendor-bills', async (req, res) => {
 router.put('/vendor-bills/:id', async (req, res) => {
   try {
     const { tenantId, userId } = req.user;
-    const { _id } = req.params;
+    const id = req.params.id;
     const updates = req.body;
+    console.log("id is : ", id);
 
-    const vendorBill = await VendorBill.findOne({ _id: _id, tenantId });
+    const vendorBill = await VendorBill.findOne({ _id: id, tenantId });
     
     if (!vendorBill) {
-      return res.status(404).json({
+      return res.status(401).json({
         success: false,
         message: 'Vendor bill not found'
       });
@@ -305,24 +322,136 @@ router.put('/vendor-bills/:id', async (req, res) => {
     // Transform response
     const transformedBill = {
       _id: vendorBill._id.toString(),
-      vendorId: vendorBill.vendorId.toString(),
-      vendorName: vendorBill.vendorName,
+      vendorId: vendorBill.vendorId?._id?.toString() || vendorBill.vendorId,
+      vendorName: vendorBill.vendorName || vendorBill.vendorId?.name,
       billNumber: vendorBill.billNumber,
       billDate: vendorBill.billDate,
       dueDate: vendorBill.dueDate,
       uploadDate: vendorBill.createdAt,
-      totalAmount: vendorBill.amount,
-      taxableAmount: vendorBill.total,
-      cgst: vendorBill.tax,
-      sgst: vendorBill.tax,
-      igst: vendorBill.igst,
-      tdsRate: vendorBill.tdsRate,
+      totalAmount: vendorBill.total || vendorBill.amount,
+      amount: vendorBill.amount,
+      taxableAmount: vendorBill.amount,
+      cgst: vendorBill.cgst,
+      sgst: vendorBill.sgst,
+      igst: 0,
       tdsAmount: vendorBill.tdsAmount,
-      payableAmount: vendorBill.total,
+      tdsRate: vendorBill.tdsRate,
+      payableAmount: vendorBill.payableAmount,
       status: vendorBill.status === 'unpaid' ? 'pending' : vendorBill.status,
+      paymentStatus: vendorBill.paymentStatus,
       description: vendorBill.notes || '',
       fileName: vendorBill.attachments?.[0]?.name || '',
-      attachments: vendorBill.attachments
+      paymentDate: vendorBill.paymentDate,
+      pendingAmount: vendorBill.pendingAmount,
+      paymentMethod: vendorBill.paymentMethod,
+      paymentReference: vendorBill.paymentReference,
+      attachments: vendorBill.attachments || []
+    };
+
+    res.json({
+      success: true,
+      message: 'Vendor bill updated successfully',
+      vendorBill: transformedBill
+    });
+  } catch (error) {
+    console.error('Error updating vendor bill:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update vendor bill',
+      error: error.message
+    });
+  }
+});
+
+router.put('/vendor-bills/payment/:id', async (req, res) => {
+  try {
+    const { tenantId, userId } = req.user;
+    const id = req.params.id;
+    const updates = req.body;
+    console.log("id is : ", id);
+
+    const vendorBill = await VendorBill.findOne({ _id: id, tenantId });
+    
+    if (!vendorBill) {
+      return res.status(401).json({
+        success: false,
+        message: 'Vendor bill not found'
+      });
+    }
+
+    // Update fields
+    // Object.keys(updates).forEach(key => {
+    //   if (updates[key] !== undefined && updates[key] !== null) {
+    //     vendorBill[key] = updates[key];
+    //   }
+    // });
+
+    // vendorBill.paymentDate = updates.paymentDate;
+
+    const paidRaw = updates.paidAmount;
+    const paid = paidRaw === undefined || paidRaw === null || paidRaw === ""
+      ? 0
+      : Number(paidRaw);
+
+    if (Number.isNaN(paid)) {
+      return res.status(401).json({ success: false, message: 'Invalid paidAmount' });
+    }
+
+    const pendingAmount = (vendorBill.pendingAmount ? vendorBill.pendingAmount : vendorBill.payableAmount) - paid;
+    const totalAmountPaid = vendorBill.paidAmount + paid;
+    if(pendingAmount < 0 || totalAmountPaid > vendorBill.payableAmount){
+      console.error('Error updating vendor bill payment :', error);
+      const message = ('Pending amount : ', vendorBill.pendingAmount, '. You have already paid : ', vendorBill.paidAmount);
+      res.status(500).json({
+        success: false,
+        error: message
+      });
+    }
+    vendorBill.paymentMethod = updates.paymentMethod;
+    vendorBill.paidAmount += paid;
+    vendorBill.pendingAmount = pendingAmount;
+    vendorBill.paymentReference = updates.paymentReference;
+    vendorBill.paymentDate = new Date();
+    console.log("vendor bill details : ", vendorBill);
+    vendorBill.status = "verified";
+
+    if(vendorBill.pendingAmount == 0 || vendorBill.paidAmount == vendorBill.payableAmount){
+      vendorBill.paymentStatus = "paid";
+    }
+    if(vendorBill.pendingAmount>0){
+      vendorBill.paymentStatus = "partial";
+    }
+
+    vendorBill.updatedAt = new Date();
+    await vendorBill.save();
+
+    // Transform response
+    const transformedBill = {
+      _id: vendorBill._id.toString(),
+      vendorId: vendorBill.vendorId?._id?.toString() || vendorBill.vendorId,
+      vendorName: vendorBill.vendorName || vendorBill.vendorId?.name,
+      billNumber: vendorBill.billNumber,
+      billDate: vendorBill.billDate,
+      dueDate: vendorBill.dueDate,
+      uploadDate: vendorBill.createdAt,
+      totalAmount: vendorBill.total || vendorBill.amount,
+      amount: vendorBill.amount,
+      taxableAmount: vendorBill.amount,
+      cgst: vendorBill.cgst,
+      sgst: vendorBill.sgst,
+      igst: 0,
+      tdsAmount: vendorBill.tdsAmount,
+      tdsRate: vendorBill.tdsRate,
+      payableAmount: vendorBill.payableAmount,
+      status: vendorBill.status === 'unpaid' ? 'pending' : vendorBill.status,
+      paymentStatus: vendorBill.paymentStatus,
+      description: vendorBill.notes || '',
+      fileName: vendorBill.attachments?.[0]?.name || '',
+      paymentDate: vendorBill.paymentDate,
+      pendingAmount: vendorBill.pendingAmount,
+      paymentMethod: vendorBill.paymentMethod,
+      paymentReference: vendorBill.paymentReference,
+      attachments: vendorBill.attachments || []
     };
 
     res.json({
@@ -344,12 +473,15 @@ router.put('/vendor-bills/:id', async (req, res) => {
 router.delete('/vendor-bills/:id', async (req, res) => {
   try {
     const { tenantId } = req.user;
-    const { _id } = req.params;
+    const _id  = req.params.id;
+    console.log("deleting vendor bill: ", _id);
 
-    const vendorBill = await VendorBill.findOneAndDelete({ 
+
+    const vendorBill = await VendorBill.findOne({ 
       _id: _id, 
       tenantId 
     });
+   
 
     if (!vendorBill) {
       return res.status(404).json({
@@ -357,6 +489,9 @@ router.delete('/vendor-bills/:id', async (req, res) => {
         message: 'Vendor bill not found'
       });
     }
+    vendorBill.archive = true;
+    vendorBill.deletedStatus = true;
+    vendorBill.save();
 
     res.json({
       success: true,

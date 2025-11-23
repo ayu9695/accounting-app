@@ -4,11 +4,12 @@ const { Schema } = mongoose;
 const VendorBillSchema = new Schema({
   tenantId: { type: Schema.Types.ObjectId, required: true, ref: 'Tenant' },
   vendorId: { type: Schema.Types.ObjectId, ref: 'Vendor', required: true },
-  department: { type: Schema.Types.ObjectId, ref: 'Department'}, // updated to reference Department
+  // department: { type: Schema.Types.ObjectId, ref: 'Department'}, // updated to reference Department
   vendorName: { type: String },
   billNumber: { type: String, required: true },
   billDate: { type: Date, required: true },
   dueDate: { type: Date },
+  paymentDate: {type : Date},
   amount: { type: Number, required: true },
   taxableAmount: { type: Number }, // Amount on which tax is calculated
   cgst: { type: Number, default: 0 },
@@ -20,9 +21,11 @@ const VendorBillSchema = new Schema({
   tdsRate: { type: Number, default: 0 }, // TDS percentage
   tdsAmount: { type: Number, default: 0 }, // TDS amount
   payableAmount: { type: Number }, // total - tdsAmount
+  paidAmount: { type: Number, default: 0 },
+  pendingAmount: { type: Number }, // payableAmount-paidAmount
   paymentMethod: { 
     type: String, 
-    enum: ['bank_transfer', 'cheque', 'cash', 'upi', 'card', 'other'] 
+    enum: ['bank_transfer', 'cheque', 'cash', 'upi', 'credit_card','debit_card', 'other'] 
   },
   paymentReference: { type: String },
 
@@ -30,10 +33,14 @@ const VendorBillSchema = new Schema({
   verifiedDate: { type: Date },
   verifiedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   
-  status: { type: String, enum: ['pending',, 'unpaid', 'verified', 'paid', 'partial', 'cancelled'], default: 'unpaid' },
-    description: { type: String },
+  status: { type: String, enum: ['pending', 'unverified', 'verified', 'cancelled'], default: 'unverified' },
+  paymentStatus: {type: String, enum: ['pending', 'unpaid', 'paid', 'partial', 'cancelled'], default: 'unpaid'},
+  paidAmount: {type: Number, default: 0},
+  description: { type: String },
   notes: { type: String },
   fileName: { type: String }, // Original uploaded file name
+  archive: {type: Boolean, default: false},
+  deletedStatus: {type: Boolean, default: false},
   
   attachments: [
     {
@@ -75,15 +82,15 @@ VendorBillSchema.pre('save', function(next) {
   this.payableAmount = this.total - (this.tdsAmount || 0);
     console.log("taxable: ", this.total, " tds: ", this.tdsAmount, " payable: ",this.payableAmount);
 
-  
-  // Set taxable amount if not provided
-  if (!this.taxableAmount) {
     this.taxableAmount = this.amount;
+
+  if(this.paymentStatus == 'paid' || this.paymentStatus == 'partial'){
+    // Update timestamp
+    this.updatedAt = new Date();
+    
+    next();
   }
-  
-  // Update timestamp
-  this.updatedAt = new Date();
-  
+  this.pendingAmount = this.payableAmount - this.paidAmount;
   next();
 });
 

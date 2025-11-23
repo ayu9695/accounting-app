@@ -11,11 +11,14 @@ router.get('/invoices/:invoiceNumber', authMiddleware, invoicesController.getInv
 
 router.get('/invoices/client/:clientName', authMiddleware, invoicesController.getInvoicesByClient);
 
+router.post('/invoices/gst-billed', authMiddleware, invoicesController.getGstBilledByMonth);
+
 // Create new invoice
 router.post('/invoices', authMiddleware, invoicesController.createInvoice);
 
-// Update invoice by ID
 router.put('/invoices/:id', authMiddleware, invoicesController.updateInvoice);
+// Update invoice by ID
+router.put('/invoices/payment/:id', authMiddleware, invoicesController.updatePaymentForInvoice);
 
 // Delete invoice by ID
 router.delete('/invoices/:id', authMiddleware, invoicesController.deleteInvoice);

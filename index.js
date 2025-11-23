@@ -5,13 +5,14 @@ const connectDB = require('./config/db');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const cookieParser = require('cookie-parser');
+const initSalaryCron = require('./jobs/salaryCron');
 
 connectDB();
 
 app.use(express.json());
 const cors = require('cors');
 app.use(cors({
-  origin: ['https://accounting-software-self.vercel.app'], // your frontend URL
+  origin: ['http://localhost:6060'], // your frontend URL
   credentials: true               // allow cookies to be sent
 }));
 app.use(cookieParser()); // ✅ Add this near top
@@ -28,6 +29,8 @@ fs.readdirSync(routesPath).forEach((file) => {
     app.use('/api', route);  // You can prefix this with '/api' or customize
   }
 });
+
+initSalaryCron();
 
 // Root route
 app.get('/', (req, res) => {

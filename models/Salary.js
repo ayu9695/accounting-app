@@ -11,7 +11,7 @@ const SalaryRecordSchema = new Schema({
   allowances: { type: Number },
   deductions: { type: Number },
   leaveDays: { type: Number, default: 0 },
-  workingDays: { type: Number, required: true },
+  workingDays: { type: Number},
   grossSalary: { type: Number },
   netSalary: { type: Number },
   status: {

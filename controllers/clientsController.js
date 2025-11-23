@@ -7,7 +7,6 @@ exports.getAllClients = async (req, res) => {
         if (!tenantId) {
       return res.status(400).json({ error: 'Tenant ID missing in token' });
     }
-    console.log("Fetched tenant id");
 
     // Fetch client for the authenticated tenant
     const clients = await Client.find({ tenantId, isActive: true }).sort({ name: 1 }); // optional: sort by name
@@ -16,6 +15,7 @@ exports.getAllClients = async (req, res) => {
       return res.status(404).json({ error: 'client not found for this tenant' });
     }
 
+    console.log("returning clients : ",clients);
     return res.json(clients);
   } catch (error) {
     console.error('Error fetching clients:', error);

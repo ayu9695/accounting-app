@@ -12,14 +12,16 @@ const EmployeeSchema = new Schema({
     {
       name: { type: String, required: true },
       amount: { type: Number, required: true },
-      type: { type: String, enum: ['fixed', 'percentage'] }
+      type: { type: String, enum: ['fixed', 'percentage'] },
+      date: { type: Date }
     }
   ],
   deductions: [
     {
       name: { type: String, required: true },
       amount: { type: Number, required: true },
-      type: { type: String, enum: ['fixed', 'percentage'] }
+      type: { type: String, enum: ['fixed', 'percentage'] },
+      date: { type: Date }
     }
   ],
   joinDate: { type: Date, required: true },

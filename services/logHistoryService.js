@@ -6,7 +6,7 @@
  * @param {*} oldVal - The original value of the attribute.
  * @param {*} newVal - The new value of the attribute.
  */
-exports.logUpdateHistory = async (doc, userId, key, oldVal, newVal) => {
+const logUpdateHistory = (userId, key, oldVal, newVal) => {
 
     // Construct and push the history entry
     doc.updateHistory.push({
@@ -20,18 +20,4 @@ exports.logUpdateHistory = async (doc, userId, key, oldVal, newVal) => {
     console.log(`History logged for '${key}': ${oldVal} -> ${newVal}`);
 };
 
-exports.logPaymentHistory = async (doc, userId, amount, paymentDate, paymentMethod, reference, notes ) => {
-
-        // Construct and push the payment entry
-    doc.paymentHistory.push({
-        amount: amount,
-        paymentDate: paymentDate,
-        paymentMethod: paymentMethod || 'N/A',
-        reference: reference,
-        notes: notes,
-        recordedBy: userId,
-        recordedAt: new Date()
-    });
-  
-    console.log(`History logged for payment: ${amount} recorded by ${userId}`);
-};
+module.exports = { logUpdateHistory };
