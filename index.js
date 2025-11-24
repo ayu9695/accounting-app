@@ -12,7 +12,7 @@ connectDB();
 app.use(express.json());
 const cors = require('cors');
 app.use(cors({
-  origin: ['http://localhost:6060'], // your frontend URL
+  origin: ['https://accounting-software-self.vercel.app/'], // your frontend URL
   credentials: true               // allow cookies to be sent
 }));
 app.use(cookieParser()); // ✅ Add this near top
