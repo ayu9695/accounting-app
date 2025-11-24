@@ -1,4 +1,5 @@
 const express = require('express');
+require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const connectDB = require('./config/db');
@@ -9,10 +10,12 @@ const initSalaryCron = require('./jobs/salaryCron');
 
 connectDB();
 
+const FRONTEND_URL = process.env.FRONTEND_URL;
+
 app.use(express.json());
 const cors = require('cors');
 app.use(cors({
-  origin: ['https://accounting-software-self.vercel.app/'], // your frontend URL
+  origin: FRONTEND_URL, // your frontend URL
   credentials: true               // allow cookies to be sent
 }));
 app.use(cookieParser()); // ✅ Add this near top
