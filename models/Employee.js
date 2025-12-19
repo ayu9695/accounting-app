@@ -26,6 +26,7 @@ const EmployeeSchema = new Schema({
   ],
   joinDate: { type: Date, required: true },
   isActive: { type: Boolean, default: true },
+  salaryPaymentDate: { type: Number, default: 1, min: 1, max: 31 }, // Day of month when salary is paid (1-28)
   bankDetails: {
     accountNumber: { type: String },
     ifscCode: { type: String },

@@ -11,11 +11,18 @@ const InvoiceSchema = new mongoose.Schema({
     hsnCode: {type: String},
     currency: {type: String},
     lineItems: [{
+        id: { type: String },
         service: {type: String},
         description: {type: String},
-        quantity: {type:Number},
         rate: {type:Number},
         amount: {type:Number},
+        resourceName: {type: String},
+        periodFrom: {type: Date},
+        periodTo: {type: Date},
+        rateType: {type: String, enum: ['monthly', 'hourly']},
+        lop: {type: Number}, //loss of pay days
+        extraDays: {type: Number},
+        numberOfHours: {type: Number}
     }],
     subtotal: {type:Number},
     discount: {type:Number}, //percentage
@@ -39,6 +46,13 @@ const InvoiceSchema = new mongoose.Schema({
         recordedBy: { type: Schema.Types.ObjectId, ref: 'User' },
         recordedAt: { type: Date, default: Date.now }
     }],
+    bankAccountDetails: {
+        accountName: { type: String },
+        accountNumber: { type: String },
+        bankName: { type: String },
+        ifscCode: { type: String },
+        branch: { type: String }
+    },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
     createdBy: {type: Schema.Types.ObjectId, ref: 'User'},

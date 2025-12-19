@@ -6,10 +6,15 @@ const invoicesController = require('../controllers/invoiceController');
 // Fetch all invoices for tenant
 router.get('/invoices', authMiddleware, invoicesController.getAllInvoices);
 
+// Filter invoices by date range (must be before :invoiceNumber to avoid conflicts)
+router.get('/invoices/filter/by-date', authMiddleware, invoicesController.getInvoicesByDateRange);
+
 // Fetch invoice by ID
 router.get('/invoices/:invoiceNumber', authMiddleware, invoicesController.getInvoiceById);
 
 router.get('/invoices/client/:clientName', authMiddleware, invoicesController.getInvoicesByClient);
+
+router.get('/invoices/pdf/:id', authMiddleware, invoicesController.generateInvoicePDF);
 
 router.post('/invoices/gst-billed', authMiddleware, invoicesController.getGstBilledByMonth);
 
