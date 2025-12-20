@@ -12,6 +12,8 @@ const SalaryRecordSchema = new Schema({
   deductions: { type: Number },
   leaveDays: { type: Number, default: 0 },
   workingDays: { type: Number},
+  defaultWorkingDays: { type: Number }, // Calculated working days (weekdays - official holidays)
+  actualWorkingDays: { type: Number }, // Actual working days from FE (defaults to defaultWorkingDays)
   grossSalary: { type: Number },
   netSalary: { type: Number },
   status: {
@@ -19,7 +21,9 @@ const SalaryRecordSchema = new Schema({
     enum: ['pending', 'processed', 'paid'],
     default: 'pending'
   },
-  paymentDate: { type: Date },
+  salaryPaymentDate: { type: Number, default: 1, min: 1, max: 28 }, // Day of month copied from employee
+  paidOn: { type: Date }, // Actual date when salary was paid
+  paymentDate: { type: Date }, // Scheduled payment date (for filtering in dashboard)
   paymentMethod: { type: String },
   paymentReference: { type: String },
   processedAt: { type: Date },

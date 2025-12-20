@@ -60,6 +60,44 @@ exports.getExpenseById = async (req, res) => {
   }
 };
 
+// GET /api/expenses/filter/unpaid
+exports.getUnpaidExpenses = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const userId = req.user.userId;
+    
+    // Get all unpaid expenses (paymentStatus: false) sorted by expenseDate descending
+    const expenses = await Expense.find({ 
+      tenantId, 
+      paymentStatus: false 
+    }).sort({ expenseDate: -1 });
+    
+    const user = await User.findOne({ _id: userId, tenantId });
+
+    const transformedExpenses = expenses.map(expense => ({
+      id: expense._id.toString(),
+      category: expense.category.toString(),
+      amount: expense.amount,
+      currency: expense.currency,
+      paymentStatus: expense.paymentStatus,
+      approvalStatus: expense.approvalStatus,
+      expenseDate: expense.expenseDate,
+      description: expense.description,
+      createdBy: user?.name || 'Unknown',
+      createdAt: expense.createdAt,
+      updatedAt: expense.updatedAt,
+    }));
+
+    return res.json({
+      expenses: transformedExpenses,
+      count: transformedExpenses.length
+    });
+  } catch (error) {
+    console.error('Error fetching unpaid expenses:', error);
+    return res.status(500).json({ error: 'Server error fetching unpaid expenses' });
+  }
+};
+
 // POST /api/expenses
 exports.createExpense = async (req, res) => {
   try {

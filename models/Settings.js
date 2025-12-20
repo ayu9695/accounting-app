@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
 const SettingsSchema = new Schema({
-  tenantId: { type: Schema.Types.ObjectId, required: true, unique: true, ref: 'Tenant' },
+  tenantId: { type: Schema.Types.ObjectId, required: true, ref: 'Tenant' },
   domain: { type: String, required: true, unique: true },
   tenantNumber: {type: Number, required: true },
   name: { type: String, required: true },
@@ -22,10 +22,25 @@ const SettingsSchema = new Schema({
   address: { type: String },
   invoicePrefix: { type: String },
   expenseCategories: [String],
-paymentMethod: { 
+  paymentMethod: { 
     type: String, 
     enum: ['bank_transfer', 'cheque', 'cash', 'upi', 'credit_card','debit_card', 'other'] 
   },
+  bankAccountDetails: [{
+    accountName: { type: String },
+    accountNumber: { type: String },
+    bankName: { type: String },
+    ifscCode: { type: String },
+    branch: { type: String },
+    primaryAccount: { type: Boolean, default: false }
+  }],
+  officialLeaves: [{
+    year: { type: Number, required: true },
+    holidays: [{
+      name: { type: String, required: true },
+      date: { type: Date, required: true }
+    }]
+  }],
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date},
   updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
@@ -38,6 +53,6 @@ paymentMethod: {
 }]
 });
 
-SettingsSchema.index({ tenantId: 1 });
+SettingsSchema.index({ tenantId: 1 }, { unique: true });
 
 module.exports = mongoose.model('Settings', SettingsSchema);

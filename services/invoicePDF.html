@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Tax Invoice - {{invoiceNumber}}</title>
+    <style>
+        /* PDF specific styles */
+        body { font-family: 'Helvetica', 'Arial', sans-serif; color: #333; line-height: 1.5; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; }
+        
+        /* Grid Layout Helpers */
+        .grid-section { width: 100%; border-left: 1px solid #333; border-right: 1px solid #333; }
+        
+        /* Main Invoice Header */
+        .main-header { 
+            font-size: 20px; 
+            font-weight: bold; 
+            text-align: center; 
+            background-color: #333; 
+            color: white; 
+            padding: 5px 0; 
+            border: 1px solid #333; 
+            border-bottom: none; 
+            margin: 0;
+        }
+
+         .sub-header { 
+            font-size: 10px; 
+            font-weight: bold; 
+            text-align: left; 
+            background-color: #333; 
+            color: white; 
+            padding: 2px 5px; /* Added padding */
+            border: 1px solid #333; 
+            border-bottom: none; 
+            margin: 0;
+        }
+
+        /* Info Blocks */
+        .info-block { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            border: 1px solid #333; 
+            border-bottom: none; 
+            margin: 0;
+        }
+        
+        .info-content { padding: 5px; } /* Increased padding slightly for breathability */
+        .info-left { border-right: 1px solid #333; }
+        
+        .label { font-size: 10px; color: #6b7280; font-weight: 500; display: block; margin-top: 5px; }
+        .value { font-size: 12px; font-weight: 600; }
+
+        /* --- ITEMS SECTION REDESIGN --- */
+        .items-section-wrapper { 
+            border: 1px solid #333; 
+            border-bottom: none; 
+            margin: 0;
+            /* Flex column to stretch height */
+            display: flex; 
+            flex-direction: column;
+            /* Fixed Height for A4 - Adjust 600px based on your header/footer size */
+            min-height: 600px; 
+        }
+        
+        /* Table Styling */
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin: 0; 
+            font-size: 12px; 
+            flex-grow: 1; /* Allows table to fill the space */
+        }
+        
+        th { 
+            text-align: left; 
+            padding: 8px 10px; 
+            background-color: #333; 
+            color: white; 
+            font-weight: 700; 
+            /* REMOVED inner vertical lines */
+            border-right: none; 
+        }
+        
+        /* Table Body Cells */
+        td { 
+            padding: 8px 10px; 
+            /* REMOVED inner vertical lines */
+            border-right: none; 
+            /* REMOVED inner horizontal lines (except the one separating discount math) */
+            border-bottom: none; 
+            vertical-align: top; 
+        }
+        
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+
+        /* Totals Styling */
+        .totals-container { 
+            display: flex; 
+            justify-content: flex-end; 
+            margin-top: auto; 
+        }
+        
+        .totals-box { 
+            width: 350px; 
+            padding: 10px; 
+            /* REMOVED border-left to continue the open look, the whole wrapper border handles the outside */
+        }
+        
+        .total-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 12px; }
+        .grand-total-row { border-top: 2px solid #333; margin-top: 5px; padding-top: 5px; font-weight: bold; font-size: 14px; }
+        
+        /* Footer */
+        .footer-grid { 
+            display: grid; 
+            grid-template-columns: 60% 40%; 
+            border: 1px solid #333; 
+            margin: 0;
+        }
+        .amount-bank-box { padding: 10px; border-right: 1px solid #333; }
+        .signature-box { padding: 10px; text-align: center; position: relative; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        
+        <!-- Company Header -->
+        <div style="display: grid; grid-template-columns: 1fr 2fr 1fr; align-items: center; margin-bottom: 10px;">
+            <div style="text-align: left;">
+                <div style="width: 150px; height: 50px; border: 1px dashed #ccc; display: inline-block; text-align: center; line-height: 50px; font-size: 10px;">
+                    [Company Logo]
+                </div>
+            </div>
+            <div style="text-align: center;">
+                <div style="font-size: 16px; font-weight: bold;">{{tenantName}}</div>
+                <div style="font-size: 10px;">Regd. Address - {{tenantAddress}}</div>
+                <div style="font-size: 10px;">{{tenantAddressl2}}</div>
+                <div style="font-size: 10px;">{{tenantAddressl3}}</div>
+                <div style="font-size: 10px;">GSTIN</div>
+            </div>
+            <div></div>
+        </div>
+        
+        <!-- 1. Tax Invoice Title -->
+        <div class="main-header">Tax Invoice</div>
+
+        <!-- 2. Tenant/Invoice Details Block -->
+        <div class="info-block">
+            <!-- LEFT -->
+            <div class="info-content info-left">
+                <span class="value">{{tenantName}}</span>
+                <div><span class="value">{{tenantGstin}}</span></div>
+                <span class="value">{{tenantStateName}}</span>
+            </div>
+            <!-- RIGHT -->
+            <div class="info-content">
+                <div style="display: grid; grid-template-columns: 100px 1fr; gap: 2px 5px; margin-top: 5px;">
+                    <span style="font-size: 12px; font-weight: 600; color: #6b7280;">Invoice No. :</span> <span class="value">{{invoiceNumber}}</span>
+                    <span style="font-size: 12px; font-weight: 600; color: #6b7280;">Issue Date :</span> <span class="value">{{issueDate}}</span>
+                    <span style="font-size: 12px; font-weight: 600; color: #6b7280;">HSN Code :</span> <span class="value">{{hsnCode}}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="sub-header">Invoice To :</div>
+        
+        <!-- 3. Client Details Block -->
+        <div class="info-block" style="border-top: 1px solid #333; margin-top: -1px;"> 
+            <div style="display: grid; grid-template-columns: 100px 1fr; gap: 2px 5px; margin-top: 5px; padding: 5px;">
+                <span style="font-size: 12px; font-weight: 600; color: #6b7280;">Name :</span> <span class="value">{{clientName}}</span>
+                <span style="font-size: 12px; font-weight: 600; color: #6b7280;">Address :</span> <span class="value">{{clientAddress}}</span>
+                <span style="font-size: 12px; font-weight: 600; color: #6b7280;">GSTIN :</span> <span class="value">{{GSTIN}}</span>
+            </div>
+        </div>
+
+        <!-- 4. ITEMS SECTION (The Big One) -->
+        <div class="items-section-wrapper">
+            <div style="border-top: 1px solid #333; flex-grow: 1; display: flex; flex-direction: column;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 5%; text-align: center;">S. No.</th>
+                            <th style="width: 50%;">Description Of Services</th>
+                            <th class="text-right">Per Hour ({{currencySymbol currency}})</th>
+                            <th class="text-center">No. of Hours</th>
+                            <th class="text-right">Amount ({{currencySymbol currency}})</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{#each lineItems}}
+                        <tr>
+                            <td class="text-center">{{addIndex @index}}</td>
+                            <td>
+                                <!-- Increased Resource Name Size -->
+                                <div style="font-weight: bold; font-size: 14px;">{{resourceName}}</div>
+                                <div style="font-size: 11px;">{{description}}</div>
+                                <div style="font-size: 10px; color: #666;">Period: {{period}}</div>
+                            </td>
+                            <td class="text-right">{{rate}}</td>
+                            <td class="text-center">{{quantity}}</td>
+                            <td class="text-right">{{amount}}</td>
+                        </tr>
+                        {{/each}}
+                        
+                        <!-- FILLER ROW: This forces vertical lines to go down to the totals -->
+                        <!-- If there are no line items, or few, this fills the rest of the height -->
+                        <tr style="height: 100%;">
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <!-- Financial Totals -->
+                <div class="totals-container">
+                    <div class="totals-box">
+                        <div class="total-row">
+                            <span>Sub Total</span>
+                            <span>{{currencySymbol currency}} {{subtotal}}</span>
+                        </div>
+                        <div class="total-row">
+                            <span>Discount ({{discount}}%)</span>
+                            <span>{{currencySymbol currency}} {{discountAmount}}</span>
+                        </div>
+                        <div class="total-row" style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #e5e7eb;">
+                            <span style="font-weight: bold;">Sub Total After Discount</span>
+                            <span style="font-weight: bold;">{{currencySymbol currency}} {{subtotalAfterDiscount}}</span>
+                        </div>
+                        <div class="total-row">
+                            <span>CGST ({{cgst}}%)</span>
+                            <span>{{currencySymbol currency}} {{cgstAmount}}</span>
+                        </div>
+                        <div class="total-row">
+                            <span>SGST ({{sgst}}%)</span>
+                            <span>{{currencySymbol currency}} {{sgstAmount}}</span>
+                        </div>
+                        <div class="total-row">
+                            <span>IGST ({{igst}}%)</span>
+                            <span>{{currencySymbol currency}} {{igstAmount}}</span>
+                        </div>
+                        <div class="total-row grand-total-row">
+                            <span>Total</span>
+                            <span>{{currencySymbol currency}} {{total}}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. FOOTER SECTION -->
+        <div class="footer-grid">
+            <!-- LEFT -->
+            <div class="amount-bank-box">
+                <span class="label">Amount Chargeable (in words)</span>
+                <div style="font-size: 13px; font-weight: bold; margin-top: 5px;">{{amountInWords}} {{currency}} Only</div>
+
+                <div style="margin-top: 20px;">
+                    <span class="label">Bank & Branch</span>
+                    <div class="value">{{bankAccountDetails.bankName}} - {{bankAccountDetails.branch}}</div>
+                    <span class="label">Bank A/C No.</span>
+                    <div class="value">{{bankAccountDetails.accountNumber}}</div>
+                    <span class="label">Bank IFSC</span>
+                    <div class="value">{{bankAccountDetails.ifscCode}}</div>
+                </div>
+            </div>
+            <!-- RIGHT -->
+            <div class="signature-box">
+                <div style="font-size: 11px; margin-top: 100px; border-top: 1px solid #333; padding-top: 5px;">
+                    For {{tenantName}}
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+    <div style="text-align: center; font-size: 10px; margin-top: 20px;">
+        Thank You For Your Business!
+    </div>
+</body>
+</html>
