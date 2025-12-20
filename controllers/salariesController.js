@@ -53,7 +53,7 @@ exports.getAllSalaries = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const salaries = await SalaryRecord.find({ tenantId })
-      .populate('employeeId', 'name email salaryPaymentDate')
+      .populate('employeeId', 'name email salaryPaymentDate department position')
       .sort({ year: -1, month: -1 });
     
     // Calculate sum of all salaries (netSalary)
@@ -88,7 +88,7 @@ exports.getUnpaidSalaries = async (req, res) => {
       tenantId,
       status: { $ne: 'paid' }
     })
-      .populate('employeeId', 'name email salaryPaymentDate')
+      .populate('employeeId', 'name email salaryPaymentDate department position')
       .sort({ year: -1, month: -1 });
     
     return res.json({
@@ -122,7 +122,7 @@ exports.getMonthlySalaries = async (req, res) => {
       month: monthName,
       year: year
     })
-      .populate('employeeId', 'name email salaryPaymentDate')
+      .populate('employeeId', 'name email salaryPaymentDate department position')
       .sort({ year: -1, month: -1 });
     
     // Calculate sum of all salaries (netSalary)
