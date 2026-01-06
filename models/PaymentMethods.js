@@ -6,6 +6,7 @@ const PaymentMethodsSchema = new Schema({
   code: {type: String, required: true},
   name: {type: String, required: true},
   description : {type: String},
+  isActive: { type: Boolean, default: true },
   createdBy: {type: Schema.Types.ObjectId, ref: 'User'},
   updateHistory: [{
     attribute: { type: String, required: true },
@@ -14,7 +15,7 @@ const PaymentMethodsSchema = new Schema({
     updatedAt: { type: Date, default: Date.now },
     updatedBy: { type: Schema.Types.ObjectId, ref: 'User' }
   }]
-})
+}, { timestamps: true })
 
 PaymentMethodsSchema.index({tenantId: 1, name: 1}, { unique: true });
 

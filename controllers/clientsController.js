@@ -9,7 +9,9 @@ exports.getAllClients = async (req, res) => {
     }
 
     // Fetch client for the authenticated tenant
-    const clients = await Client.find({ tenantId, isActive: true }).sort({ name: 1 }); // optional: sort by name
+    const clients = await Client.find({ tenantId, isActive: true })
+      .populate('department', 'name')
+      .sort({ name: 1 }); // optional: sort by name
 
     if (!clients) {
       return res.status(404).json({ error: 'client not found for this tenant' });
@@ -96,7 +98,7 @@ exports.getClientContacts = async (req, res) => {
     }
     console.log("Fetched tenant id");
     const clients = await Client.find(
-      { tenantId },
+      { tenantId, isActive: { $ne: false } },
       'name email contactPerson'
     );
     // console.log("client contacts fetched : ", clients);
@@ -114,7 +116,8 @@ exports.getClientByName = async (req, res) => {
     }
 
     const clientName = req.params.name;
-    const client = await Client.findOne({ tenantId, name: clientName });
+    const client = await Client.findOne({ tenantId, name: clientName })
+      .populate('department', 'name');
 
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
@@ -226,7 +229,8 @@ exports.updateClient = async (req, res) => {
     }
     const clientId = req.params.id;
 
-    const client = await Client.findOne({ _id: clientId, tenantId });
+    const client = await Client.findOne({ _id: clientId, tenantId })
+      .populate('department', 'name');
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
@@ -251,6 +255,7 @@ exports.updateClient = async (req, res) => {
     client.updatedAt = new Date();
 
     await client.save();
+    await client.populate('department', 'name');
 
     return res.json(client);
   } catch (error) {
@@ -265,9 +270,9 @@ exports.deleteClient = async (req, res) => {
         if (!tenantId) {
       return res.status(400).json({ error: 'Tenant ID missing in token' });
         }
-    const clientName = req.params.name;
+    const clientId = req.params.id;
 
-    const client = await Client.findOne({ tenantId, name: clientName });
+    const client = await Client.findOne({ tenantId, _id: clientId });
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
@@ -291,5 +296,49 @@ exports.deleteClient = async (req, res) => {
   } catch (error) {
     console.error('Error soft-deleting client:', error);
     return res.status(500).json({ error: 'Server error soft-deleting client' });
+  }
+};
+
+// POST /api/clients/:id/activate
+// Reactivate a previously soft-deleted client (isActive -> true)
+exports.activateClient = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    if (!tenantId) {
+      return res.status(400).json({ error: 'Tenant ID missing in token' });
+    }
+
+    const clientId = req.params.id;
+
+    const client = await Client.findOne({ _id: clientId, tenantId })
+      .populate('department', 'name');
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+
+    if (client.isActive) {
+      return res.status(200).json({ message: 'Client is already active', client });
+    }
+
+    const previousValue = client.isActive === undefined ? null : client.isActive;
+    client.isActive = true;
+
+    client.updateHistory.push({
+      attribute: 'isActive',
+      oldValue: previousValue,
+      newValue: true,
+      updatedAt: new Date(),
+      updatedBy: req.user.userId
+    });
+
+    client.updatedAt = new Date();
+
+    await client.save();
+    await client.populate('department', 'name');
+
+    return res.json({ message: 'Client activated (isActive set to true)', client });
+  } catch (error) {
+    console.error('Error activating client:', error);
+    return res.status(500).json({ error: 'Server error activating client' });
   }
 };

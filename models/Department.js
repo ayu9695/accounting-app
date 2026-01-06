@@ -5,7 +5,15 @@ const DepartmentSchema = new Schema({
   tenantId: { type: Schema.Types.ObjectId, required: true, ref: 'Tenant' },
   name: { type: String, required: true },
   description: { type: String },
-  createdBy: { type: Schema.Types.ObjectId, ref: 'User' }
+  isActive: { type: Boolean, default: true },
+  createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  updateHistory: [{
+    attribute: { type: String, required: true },
+    oldValue: { type: Schema.Types.Mixed },
+    newValue: { type: Schema.Types.Mixed },
+    updatedAt: { type: Date, default: Date.now },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User' }
+  }]
 }, { timestamps: true });
 
 DepartmentSchema.index({ tenantId: 1, name: 1 }, { unique: true });

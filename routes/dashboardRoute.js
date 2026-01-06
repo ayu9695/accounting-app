@@ -10,6 +10,7 @@ router.get('/dashboard/summary', authMiddleware, dashboardController.getDashboar
 router.get('/dashboard/revenue', authMiddleware, dashboardController.getTotalRevenue);
 router.get('/dashboard/expenses', authMiddleware, dashboardController.getTotalExpenses);
 router.get('/dashboard/tax-liability', authMiddleware, dashboardController.getTaxLiability);
+router.get('/dashboard/total-tax-amount', authMiddleware, dashboardController.getTotalTaxAmount);
 
 // Chart data for revenue vs expenses graph
 router.get('/dashboard/chart', authMiddleware, dashboardController.getChartData);

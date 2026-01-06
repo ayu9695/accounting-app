@@ -5,5 +5,6 @@ const controller = require('../controllers/designationController'); // same file
 
 router.get('/designations', authMiddleware, controller.getAllDesignations);
 router.post('/designations', authMiddleware, controller.createDesignation);
+router.delete('/designations/:id', authMiddleware, controller.deleteDesignation);
 
 module.exports = router;

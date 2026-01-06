@@ -35,7 +35,7 @@ exports.getVendorContacts = async (req, res) => {
     }
     console.log("Fetched tenant id");
     const vendors = await Vendor.find(
-      { tenantId },
+      { tenantId, isActive: { $ne: false } },
       'name email contactPerson'
     );
     // console.log("Vendor contacts fetched : ", vendors);

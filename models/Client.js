@@ -30,7 +30,7 @@ const ClientSchema = new mongoose.Schema({
     position: {type: String, required: false },
   }],
   notes: {type: String},
-  isActive: {type: Boolean},
+  isActive: {type: Boolean, default: true},
   country: {type: String, default:"India" },
   createdBy: {type: Schema.Types.ObjectId, ref: 'User'},
   updateHistory: [{

@@ -23,10 +23,7 @@ const VendorBillSchema = new Schema({
   payableAmount: { type: Number }, // total - tdsAmount
   paidAmount: { type: Number, default: 0 },
   pendingAmount: { type: Number }, // payableAmount-paidAmount
-  paymentMethod: { 
-    type: String, 
-    enum: ['bank_transfer', 'cheque', 'cash', 'upi', 'credit_card','debit_card', 'other'] 
-  },
+  paymentMethod: { type: Schema.Types.ObjectId, ref: 'PaymentMethod' },
   paymentReference: { type: String },
 
     // Verification tracking
@@ -46,9 +43,12 @@ const VendorBillSchema = new Schema({
     {
       name: { type: String },
       url: { type: String },
+      data: { type: Buffer }, // PDF file data stored in MongoDB (entire PDF stored here)
+      contentType: { type: String, default: 'application/pdf' },
       type: { type: String }, // file type (pdf, jpg, etc.)
       size: { type: Number }, // file size in bytes
-      uploadedAt: { type: Date, default: Date.now }
+      uploadedAt: { type: Date, default: Date.now },
+      uploadedBy: { type: Schema.Types.ObjectId, ref: 'User' }
     }
   ],
   // Metadata
@@ -57,7 +57,14 @@ const VendorBillSchema = new Schema({
 
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
-  createdBy: { type: Schema.Types.ObjectId, ref: 'User' }
+  createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  updateHistory: [{
+    attribute: { type: String, required: true },
+    oldValue: { type: Schema.Types.Mixed },
+    newValue: { type: Schema.Types.Mixed },
+    updatedAt: { type: Date, default: Date.now },
+    updatedBy: { type: Schema.Types.ObjectId, ref: 'User' }
+  }]
 });
 
 VendorBillSchema.index({ tenantId: 1, billNumber: 1 }, { unique: true });

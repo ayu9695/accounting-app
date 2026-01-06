@@ -22,10 +22,7 @@ const SettingsSchema = new Schema({
   address: { type: String },
   invoicePrefix: { type: String },
   expenseCategories: [String],
-  paymentMethod: { 
-    type: String, 
-    enum: ['bank_transfer', 'cheque', 'cash', 'upi', 'credit_card','debit_card', 'other'] 
-  },
+  paymentMethod: { type: Schema.Types.ObjectId, ref: 'PaymentMethod' },
   bankAccountDetails: [{
     accountName: { type: String },
     accountNumber: { type: String },

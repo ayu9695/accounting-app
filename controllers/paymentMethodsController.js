@@ -6,7 +6,10 @@ exports.getAllPaymentMethods = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const userId = req.user.userId;
-    const paymentMethods = await PaymentMethod.find({ tenantId });
+    const paymentMethods = await PaymentMethod.find({ 
+      tenantId,
+      isActive: { $ne: false }
+    });
     const user = await User.findOne({ _id: userId, tenantId });
 
     const transformedPaymentMethods = paymentMethods.map(paymentMethod => ({
@@ -27,7 +30,11 @@ exports.getPaymentMethodById = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const paymentMethodId = req.params.id;
-    const paymentMethod = await PaymentMethod.findOne({ _id: paymentMethodId, tenantId });
+    const paymentMethod = await PaymentMethod.findOne({ 
+      _id: paymentMethodId, 
+      tenantId,
+      isActive: { $ne: false }
+    });
     if (!paymentMethod) return res.status(404).json({ error: 'PaymentMethod not found' });
     const user = await User.findOne({ _id: userId, tenantId });
 
@@ -123,9 +130,24 @@ exports.deletePaymentMethod = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const paymentMethodId = req.params.id;
-    const paymentMethod = await PaymentMethod.findOneAndDelete({ _id: paymentMethodId, tenantId });
+    const paymentMethod = await PaymentMethod.findOne({ _id: paymentMethodId, tenantId });
     if (!paymentMethod) return res.status(404).json({ error: 'PaymentMethod not found' });
-    return res.json({ message: 'PaymentMethod deleted successfully' });
+
+    // Soft-delete: set isActive to false (add field if not exists)
+    paymentMethod.isActive = false;
+    paymentMethod.updatedAt = new Date();
+
+    // Log to updateHistory
+    paymentMethod.updateHistory.push({
+      attribute: 'isActive',
+      oldValue: true,
+      newValue: false,
+      updatedAt: new Date(),
+      updatedBy: req.user.userId
+    });
+
+    await paymentMethod.save();
+    return res.json({ message: 'PaymentMethod soft-deleted successfully' });
   } catch (error) {
     console.error('Error deleting PaymentMethod:', error);
     return res.status(500).json({ error: 'Server error deleting PaymentMethod' });

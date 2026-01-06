@@ -54,6 +54,7 @@ exports.getAllSalaries = async (req, res) => {
     const tenantId = req.user.tenantId;
     const salaries = await SalaryRecord.find({ tenantId })
       .populate('employeeId', 'name email salaryPaymentDate department position')
+      .populate('paymentMethod', 'name code')
       .sort({ year: -1, month: -1 });
     
     // Calculate sum of all salaries (netSalary)
@@ -89,6 +90,7 @@ exports.getUnpaidSalaries = async (req, res) => {
       status: { $ne: 'paid' }
     })
       .populate('employeeId', 'name email salaryPaymentDate department position')
+      .populate('paymentMethod', 'name code')
       .sort({ year: -1, month: -1 });
     
     return res.json({
@@ -123,6 +125,7 @@ exports.getMonthlySalaries = async (req, res) => {
       year: year
     })
       .populate('employeeId', 'name email salaryPaymentDate department position')
+      .populate('paymentMethod', 'name code')
       .sort({ year: -1, month: -1 });
     
     // Calculate sum of all salaries (netSalary)
@@ -152,7 +155,7 @@ exports.getMonthlySalaries = async (req, res) => {
 exports.createSalary = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const { employeeId, month, year, allowances, deductions, baseSalary } = req.body;
+    const { employeeId, month, year, allowances, reimbursements, deductions, baseSalary } = req.body;
 
     // Get employee to copy salaryPaymentDate and baseSalary
     let salaryPaymentDate = 1;
@@ -166,13 +169,16 @@ exports.createSalary = async (req, res) => {
       }
     }
 
-    // Calculate allowances and deductions if provided
+    // Calculate allowances, reimbursements, and deductions if provided
     const totalAllowances = calculateTotalFromArray(allowances, employeeBaseSalary);
+    const totalReimbursements = calculateTotalFromArray(reimbursements, employeeBaseSalary);
     const totalDeductions = calculateTotalFromArray(deductions, employeeBaseSalary);
 
     // Calculate gross and net salary
+    // Gross salary = baseSalary + allowances (stays the same)
     const grossSalary = employeeBaseSalary + totalAllowances;
-    const netSalary = grossSalary - totalDeductions;
+    // Net salary = grossSalary + reimbursements - deductions (payable amount)
+    const netSalary = grossSalary + totalReimbursements - totalDeductions;
 
     // Calculate paymentDate (scheduled payment date for this salary)
     const paymentDate = calculatePaymentDate(salaryPaymentDate, month, year);
@@ -185,6 +191,7 @@ exports.createSalary = async (req, res) => {
       tenantId,
       baseSalary: employeeBaseSalary,
       allowances: totalAllowances,
+      reimbursements: totalReimbursements,
       deductions: totalDeductions,
       grossSalary: grossSalary,
       netSalary: netSalary,
@@ -214,9 +221,10 @@ exports.updateSalary = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const salaryId = req.params.id;
-    const { allowances, deductions, baseSalary, ...otherUpdates } = req.body;
+    const { allowances, reimbursements, deductions, baseSalary, ...otherUpdates } = req.body;
 
-    const salary = await SalaryRecord.findOne({ _id: salaryId, tenantId });
+    const salary = await SalaryRecord.findOne({ _id: salaryId, tenantId })
+      .populate('paymentMethod', 'name code');
     if (!salary) {
       return res.status(404).json({ error: 'Salary record not found' });
     }
@@ -224,8 +232,9 @@ exports.updateSalary = async (req, res) => {
     const updateHistory = [];
     const salaryBaseSalary = baseSalary || salary.baseSalary;
 
-    // Calculate allowances and deductions if provided
+    // Calculate allowances, reimbursements, and deductions if provided
     let totalAllowances = salary.allowances || 0;
+    let totalReimbursements = salary.reimbursements || 0;
     let totalDeductions = salary.deductions || 0;
 
     if (allowances !== undefined) {
@@ -238,6 +247,18 @@ exports.updateSalary = async (req, res) => {
         updatedBy: req.user.userId
       });
       salary.allowances = totalAllowances;
+    }
+
+    if (reimbursements !== undefined) {
+      totalReimbursements = calculateTotalFromArray(reimbursements, salaryBaseSalary);
+      updateHistory.push({
+        attribute: 'reimbursements',
+        oldValue: salary.reimbursements,
+        newValue: totalReimbursements,
+        updatedAt: new Date(),
+        updatedBy: req.user.userId
+      });
+      salary.reimbursements = totalReimbursements;
     }
 
     if (deductions !== undefined) {
@@ -259,15 +280,17 @@ exports.updateSalary = async (req, res) => {
       salary.defaultWorkingDays = await calculateDefaultWorkingDays(tenantId, month, year);
     }
 
-    // Recalculate gross and net salary if allowances/deductions/baseSalary changed
-    if (allowances !== undefined || deductions !== undefined || baseSalary !== undefined) {
+    // Recalculate gross and net salary if allowances/reimbursements/deductions/baseSalary changed
+    if (allowances !== undefined || reimbursements !== undefined || deductions !== undefined || baseSalary !== undefined) {
       const oldGrossSalary = salary.grossSalary;
       const oldNetSalary = salary.netSalary;
       
       const newBaseSalary = baseSalary || salary.baseSalary;
       salary.baseSalary = newBaseSalary;
+      // Gross salary = baseSalary + allowances (stays the same)
       const newGrossSalary = newBaseSalary + totalAllowances;
-      const newNetSalary = newGrossSalary - totalDeductions;
+      // Net salary = grossSalary + reimbursements - deductions (payable amount)
+      const newNetSalary = newGrossSalary + totalReimbursements - totalDeductions;
 
       salary.grossSalary = newGrossSalary;
       salary.netSalary = newNetSalary;
@@ -329,7 +352,8 @@ exports.markSalaryAsPaid = async (req, res) => {
     const salaryId = req.params.id;
     const { paidOn, paymentMethod, paymentReference, actualWorkingDays, deductions, allowances, netSalary } = req.body;
 
-    const salary = await SalaryRecord.findOne({ _id: salaryId, tenantId });
+    const salary = await SalaryRecord.findOne({ _id: salaryId, tenantId })
+      .populate('paymentMethod', 'name code');
     if (!salary) {
       return res.status(404).json({ error: 'Salary record not found' });
     }
@@ -537,7 +561,7 @@ exports.bulkMarkAsPaid = async (req, res) => {
         const salary = await SalaryRecord.findOne({ 
           _id: salaryObjectId, 
           tenantId: tenantId 
-        });
+        }).populate('paymentMethod', 'name code');
         
         if (!salary) {
           results.failed.push({ id: salaryId, error: 'Salary not found or does not belong to your tenant' });
