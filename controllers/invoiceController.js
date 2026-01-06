@@ -19,7 +19,13 @@ const logoPath = path.resolve(__dirname, '../public/logo.jpeg');
 exports.getAllInvoices = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const invoices = await Invoice.find({ tenantId }).sort({ issueDate: -1 });
+    const invoices = await Invoice.find({ 
+      tenantId,
+      isActive: { $ne: false },
+      deletedStatus: { $ne: true }
+    })
+      .populate('paymentHistory.paymentMethod', 'code')
+      .sort({ issueDate: -1 });
     return res.json(invoices);
   } catch (error) {
     console.error('Error fetching invoices:', error);
@@ -32,7 +38,13 @@ exports.getInvoiceById = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const invoiceNumber = req.params.invoiceNumber;
-    const invoice = await Invoice.findOne({ invoiceNumber: invoiceNumber, tenantId });
+    const invoice = await Invoice.findOne({ 
+      invoiceNumber: invoiceNumber, 
+      tenantId,
+      isActive: { $ne: false },
+      deletedStatus: { $ne: true }
+    })
+      .populate('paymentHistory.paymentMethod', 'code');
     console.log("fetching invoice");
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
     return res.json(invoice);
@@ -47,7 +59,12 @@ exports.getInvoicesByClient = async (req, res) => {
     const tenantId = req.user.tenantId;
     const clientName = req.params.clientName;
 
-    const invoices = await Invoice.find({ tenantId, clientName }).sort({ issueDate: -1 });
+    const invoices = await Invoice.find({ 
+      tenantId, 
+      clientName,
+      isActive: { $ne: false },
+      deletedStatus: { $ne: true }
+    }).sort({ issueDate: -1 });
 
     if (invoices.length === 0) {
       return res.status(404).json({ error: 'No invoices found for this client' });
@@ -79,10 +96,32 @@ exports.getInvoicesByDateRange = async (req, res) => {
     const start = new Date(Date.UTC(startYear, startMonth - 1, startDay, 0, 0, 0, 0));
     const end = new Date(Date.UTC(endYear, endMonth - 1, endDay, 23, 59, 59, 999));
 
-    const invoices = await Invoice.find({
-      tenantId: new mongoose.Types.ObjectId(tenantId),
-      issueDate: { $gte: start, $lte: end }
+    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
+
+    // First: fetch invoices strictly within the requested date range
+    let invoices = await Invoice.find({
+      tenantId: tenantObjectId,
+      issueDate: { $gte: start, $lte: end },
+      isActive: { $ne: false },
+      deletedStatus: { $ne: true }
     }).sort({ issueDate: -1 });
+
+    // If fewer than 5 invoices are found in the range, backfill with most recent invoices
+    // for this tenant (ignoring the date filter), sorted by issueDate desc, up to a total of 5.
+    if (invoices.length < 5) {
+      const existingIds = invoices.map(inv => inv._id.toString());
+
+      const extraInvoices = await Invoice.find({
+        tenantId: tenantObjectId,
+        isActive: { $ne: false },
+        deletedStatus: { $ne: true },
+        _id: { $nin: existingIds }
+      })
+        .sort({ issueDate: -1 })
+        .limit(5 - invoices.length);
+
+      invoices = [...invoices, ...extraInvoices];
+    }
 
     return res.json({
       invoices,
@@ -417,6 +456,13 @@ exports.updateInvoice = async (req, res) => {
     const invoice = await Invoice.findOne({ _id: invoiceId, tenantId });
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
 
+    // Restrict editing of paid invoices to superadmin only
+    if (invoice.status === 'paid' && req.user.role !== 'superadmin') {
+      return res.status(403).json({ 
+        error: 'Forbidden: Only superadmin can edit paid invoices' 
+      });
+    }
+
     const updates = { ...req.body };
     const updateHistory = [];
 
@@ -624,9 +670,26 @@ exports.deleteInvoice = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const invoiceId = req.params.id;
-    const invoice = await Invoice.findOneAndDelete({ _id: invoiceId, tenantId });
+    const invoice = await Invoice.findOne({ _id: invoiceId, tenantId });
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
-    return res.json({ message: 'Invoice deleted successfully' });
+
+    // Soft-delete: set archive and deletedStatus to true
+    invoice.archive = true;
+    invoice.deletedStatus = true;
+    invoice.isActive = false;
+    invoice.updatedAt = new Date();
+
+    // Log to updateHistory
+    invoice.updateHistory.push({
+      attribute: 'deletedStatus',
+      oldValue: false,
+      newValue: true,
+      updatedAt: new Date(),
+      updatedBy: req.user.userId
+    });
+
+    await invoice.save();
+    return res.json({ message: 'Invoice soft-deleted successfully' });
   } catch (error) {
     console.error('Error deleting invoice:', error);
     return res.status(500).json({ error: 'Server error deleting invoice' });

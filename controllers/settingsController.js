@@ -105,6 +105,100 @@ exports.createSettings = async function createSettings(req, res) {
   }
 };
 
+/**
+ * POST /api/settings/onboard
+ * Special endpoint for creating initial settings for a new tenant
+ * NO AUTH REQUIRED - This is used during tenant onboarding
+ * 
+ * Body: {
+ *   tenantId: ObjectId (required) - The tenant _id
+ *   domain: string (required)
+ *   tenantNumber: number (required)
+ *   name: string (required)
+ *   email: string (required)
+ *   gstNumber: string (required)
+ *   ... other optional settings fields
+ * }
+ */
+exports.onboardSettings = async function onboardSettings(req, res) {
+  const session = await mongoose.startSession();
+  try {
+    const payload = req.body;
+    const tenantId = payload.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({ error: 'tenantId is required' });
+    }
+
+    // Verify tenant exists
+    const Tenant = require('../models/Tenant');
+    const tenant = await Tenant.findById(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
+
+    // Check if settings already exist
+    const existingSettings = await Settings.findOne({ tenantId: Types.ObjectId(tenantId) });
+    if (existingSettings) {
+      return res.status(409).json({ error: 'Settings already exist for this tenant' });
+    }
+
+    // Validate required fields
+    const requiredFields = ['domain', 'tenantNumber', 'name', 'email', 'gstNumber'];
+    for (const field of requiredFields) {
+      if (!payload[field]) {
+        return res.status(400).json({ error: `${field} is required` });
+      }
+    }
+
+    // Build settings document
+    const docData = { 
+      tenantId: Types.ObjectId(tenantId), 
+      createdAt: new Date(), 
+      updatedAt: new Date() 
+    };
+    
+    // Include required fields
+    requiredFields.forEach(k => {
+      docData[k] = payload[k];
+    });
+
+    // Include optional allowed fields
+    for (const key of ALLOWED_UPDATE_FIELDS.concat(['invoicePrefix','expenseCategories','paymentMethod'])) {
+      if (payload[key] !== undefined) docData[key] = payload[key];
+    }
+
+    session.startTransaction();
+    const settings = new Settings(docData);
+    await settings.save({ session });
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(201).json({ 
+      message: 'Settings created successfully',
+      data: settings 
+    });
+  } catch (err) {
+    console.error('onboardSettings error', err);
+    try { 
+      await session.abortTransaction(); 
+      session.endSession(); 
+    } catch(e) { /* ignore */ }
+    
+    if (err && err.code === 11000) {
+      return res.status(409).json({ 
+        error: 'Settings already exist for this tenant or domain already used', 
+        details: err.keyValue 
+      });
+    }
+    
+    return res.status(500).json({ 
+      error: 'Internal server error', 
+      details: err.message 
+    });
+  }
+};
+
 exports.updateSettings = async function updateSettings(req, res) {
   const tenantId = req.user.tenantId;
   const updaterId = req.user?.id || null;

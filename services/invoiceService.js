@@ -21,12 +21,12 @@ exports.logUpdateHistory = async (doc, userId, key, oldVal, newVal) => {
 };
 
 exports.logPaymentHistory = async (doc, userId, amount, paymentDate, paymentMethod, reference, notes ) => {
-
-        // Construct and push the payment entry
+    // paymentMethod can be ObjectId (from PaymentMethod model) or null/undefined
+    // Construct and push the payment entry
     doc.paymentHistory.push({
         amount: amount,
         paymentDate: paymentDate,
-        paymentMethod: paymentMethod || 'N/A',
+        paymentMethod: paymentMethod || null, // Store ObjectId reference or null
         reference: reference,
         notes: notes,
         recordedBy: userId,

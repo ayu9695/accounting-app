@@ -41,19 +41,23 @@ const getMonthsInRange = (startDate, endDate) => {
 };
 
 /**
- * Helper to parse date string as UTC start of day
+ * Helper to parse date string as LOCAL start of day
+ * Keeps behaviour consistent with how dates are usually saved when using
+ * `new Date('YYYY-MM-DD')` (which interprets the value in local time).
  */
 const parseStartDate = (dateStr) => {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+  const date = new Date(dateStr);
+  date.setHours(0, 0, 0, 0);
+  return date;
 };
 
 /**
- * Helper to parse date string as UTC end of day
+ * Helper to parse date string as LOCAL end of day
  */
 const parseEndDate = (dateStr) => {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+  const date = new Date(dateStr);
+  date.setHours(23, 59, 59, 999);
+  return date;
 };
 
 /**
@@ -97,14 +101,14 @@ exports.getDashboardSummary = async (req, res) => {
     
     // First, let's check what invoices exist for this tenant
     const allInvoices = await Invoice.find({ tenantId: tenantObjectId }).select('invoiceNumber issueDate total taxAmount currency').lean();
-    console.log('All invoices for tenant:', allInvoices.length);
-    console.log('Sample invoices:', allInvoices.slice(0, 5).map(inv => ({
-      invoiceNumber: inv.invoiceNumber,
-      issueDate: inv.issueDate,
-      total: inv.total,
-      taxAmount: inv.taxAmount,
-      currency: inv.currency
-    })));
+    // console.log('All invoices for tenant:', allInvoices.length);
+    // console.log('Sample invoices:', allInvoices.slice(0, 5).map(inv => ({
+    //   invoiceNumber: inv.invoiceNumber,
+    //   issueDate: inv.issueDate,
+    //   total: inv.total,
+    //   taxAmount: inv.taxAmount,
+    //   currency: inv.currency
+    // })));
 
     // Debug: Check all unique currencies in the database
     const uniqueCurrencies = await Invoice.distinct('currency', { tenantId: tenantObjectId });
@@ -116,6 +120,8 @@ exports.getDashboardSummary = async (req, res) => {
         $match: {
           tenantId: tenantObjectId,
           issueDate: { $gte: start, $lte: end },
+          isActive: { $ne: false },
+          deletedStatus: { $ne: true },
           $or: [
             { currency: 'INR' },
             { currency: 'inr' },
@@ -143,6 +149,8 @@ exports.getDashboardSummary = async (req, res) => {
         $match: {
           tenantId: tenantObjectId,
           issueDate: { $gte: start, $lte: end },
+          isActive: { $ne: false },
+          deletedStatus: { $ne: true },
           currency: { 
             $nin: ['INR', 'inr', null], 
             $exists: true 
@@ -162,6 +170,8 @@ exports.getDashboardSummary = async (req, res) => {
     console.log('Foreign currency Invoice aggregation result:', foreignRevenueResult);
 
     const totalRevenue = inrRevenueResult[0]?.totalRevenue || 0;
+    console.log('INR Revenue:', inrRevenueResult);
+    console.log('Total Revenue:', totalRevenue);
     const invoiceTaxAmount = inrRevenueResult[0]?.totalTaxAmount || 0;
 
     // Build foreign revenue object by currency
@@ -393,7 +403,9 @@ exports.getTotalRevenue = async (req, res) => {
       {
         $match: {
           tenantId: tenantId,
-          issueDate: { $gte: start, $lte: end }
+          issueDate: { $gte: start, $lte: end },
+          isActive: { $ne: false },
+          deletedStatus: { $ne: true }
         }
       },
       {
@@ -492,7 +504,9 @@ exports.getTotalExpenses = async (req, res) => {
       {
         $match: {
           tenantId: tenantId,
-          expenseDate: { $gte: start, $lte: end }
+          expenseDate: { $gte: start, $lte: end },
+          isActive: { $ne: false },
+          deletedStatus: { $ne: true }
         }
       },
       {
@@ -567,7 +581,9 @@ exports.getTaxLiability = async (req, res) => {
       {
         $match: {
           tenantId: tenantId,
-          issueDate: { $gte: start, $lte: end }
+          issueDate: { $gte: start, $lte: end },
+          isActive: { $ne: false },
+          deletedStatus: { $ne: true }
         }
       },
       {
@@ -598,7 +614,7 @@ exports.getTaxLiability = async (req, res) => {
 
     const invoiceTaxAmount = invoiceTaxResult[0]?.totalTaxAmount || 0;
     const vendorTdsAmount = vendorTdsResult[0]?.totalTdsAmount || 0;
-    const taxLiability = invoiceTaxAmount - vendorTdsAmount;
+    const taxLiability = invoiceTaxAmount + vendorTdsAmount;
 
     return res.json({
       taxLiability: Math.round(taxLiability * 100) / 100,
@@ -614,6 +630,79 @@ exports.getTaxLiability = async (req, res) => {
   } catch (error) {
     console.error('Error fetching tax liability:', error);
     return res.status(500).json({ error: 'Server error fetching tax liability' });
+  }
+};
+
+exports.getTotalTaxAmount = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const tenantObjectId = new mongoose.Types.ObjectId(tenantId);
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ 
+        error: 'startDate and endDate query parameters are required' 
+      });
+    }
+
+    // Parse dates - use UTC to match the input dates exactly
+    const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
+    const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
+    
+    const start = new Date(Date.UTC(startYear, startMonth - 1, startDay, 0, 0, 0, 0));
+    const end = new Date(Date.UTC(endYear, endMonth - 1, endDay, 23, 59, 59, 999));
+
+    // Invoice tax amount (filtered by issueDate) - only INR invoices
+    const invoiceTaxResult = await Invoice.aggregate([
+      {
+        $match: {
+          tenantId: tenantObjectId,
+          issueDate: { $gte: start, $lte: end },
+          currency: { $in: ['INR', null, undefined] }, // Only INR invoices
+          isActive: { $ne: false },
+          deletedStatus: { $ne: true }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalTaxAmount: { $sum: '$taxAmount' }
+        }
+      }
+    ]);
+
+    // VendorBill TDS amount (filtered by billDate)
+    const vendorTdsResult = await VendorBill.aggregate([
+      {
+        $match: {
+          tenantId: tenantObjectId,
+          billDate: { $gte: start, $lte: end },
+          isActive: true,
+          deletedStatus: false
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalTdsAmount: { $sum: '$tdsAmount' }
+        }
+      }
+    ]);
+
+    const invoiceTaxAmount = invoiceTaxResult[0]?.totalTaxAmount || 0;
+    const vendorTdsAmount = vendorTdsResult[0]?.totalTdsAmount || 0;
+
+    return res.json({
+      invoiceTaxAmount: Math.round(invoiceTaxAmount * 100) / 100,
+      vendorTdsCredit: Math.round(vendorTdsAmount * 100) / 100,
+      dateRange: {
+        startDate: startDate, // Return the input date as-is
+        endDate: endDate      // Return the input date as-is
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching total tax amount:', error);
+    return res.status(500).json({ error: 'Server error fetching total tax amount' });
   }
 };
 
@@ -744,7 +833,7 @@ exports.getChartData = async (req, res) => {
     const { startDate, endDate, granularity: requestedGranularity } = req.query;
 
     console.log('=== DASHBOARD CHART DEBUG ===');
-    console.log('Query params:', { startDate, endDate, granularity: requestedGranularity });
+    console.log('Chart query params:', { startDate, endDate, granularity: requestedGranularity });
 
     if (!startDate || !endDate) {
       return res.status(400).json({ 
@@ -752,11 +841,11 @@ exports.getChartData = async (req, res) => {
       });
     }
 
-    // Parse dates as UTC
+    // Parse dates (local day boundaries)
     const start = parseStartDate(startDate);
     const end = parseEndDate(endDate);
 
-    console.log('Parsed dates (UTC):', { start: start.toISOString(), end: end.toISOString() });
+    console.log('Chart parsed dates:', { start: start.toISOString(), end: end.toISOString() });
 
     // Determine granularity
     const granularity = (requestedGranularity && requestedGranularity !== 'auto') 
@@ -769,6 +858,7 @@ exports.getChartData = async (req, res) => {
     const dateGrouping = getDateGrouping(granularity, '$issueDate');
     const expenseDateGrouping = getDateGrouping(granularity, '$expenseDate');
     const billDateGrouping = getDateGrouping(granularity, '$billDate');
+    const salaryDateGrouping = getDateGrouping(granularity, '$paymentDate');
 
     // Revenue aggregation (INR only)
     const revenueData = await Invoice.aggregate([
@@ -776,6 +866,8 @@ exports.getChartData = async (req, res) => {
         $match: {
           tenantId: tenantObjectId,
           issueDate: { $gte: start, $lte: end },
+          isActive: { $ne: false },
+          deletedStatus: { $ne: true },
           $or: [
             { currency: 'INR' },
             { currency: 'inr' },
@@ -838,47 +930,22 @@ exports.getChartData = async (req, res) => {
 
     console.log('Other expenses data points:', otherExpensesData.length);
 
-    // Salaries - for monthly/quarterly, we can include them
-    // For daily/weekly, salaries are paid monthly so we distribute or exclude
-    let salariesData = [];
-    if (granularity === 'monthly' || granularity === 'quarterly') {
-      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'];
-      
-      const monthsInRange = getMonthsInRange(start, end);
-      
-      if (monthsInRange.length > 0) {
-        const salaryConditions = monthsInRange.map(({ month, year }) => ({
-          month: month,
-          year: year
-        }));
-
-        const rawSalaries = await SalaryRecord.aggregate([
-          {
-            $match: {
-              tenantId: tenantObjectId,
-              $or: salaryConditions
-            }
-          },
-          {
-            $group: {
-              _id: { month: '$month', year: '$year' },
-              expenses: { $sum: '$netSalary' }
-            }
-          }
-        ]);
-
-        // Convert month name to number for consistent grouping
-        salariesData = rawSalaries.map(item => ({
-          _id: {
-            year: item._id.year,
-            month: monthNames.indexOf(item._id.month) + 1,
-            quarter: Math.ceil((monthNames.indexOf(item._id.month) + 1) / 3)
-          },
-          expenses: item.expenses
-        }));
+    // Salaries expenses (always included in expenses, all granularities)
+    // Use paymentDate as the effective expense date (typically 1st of the month)
+    const salariesData = await SalaryRecord.aggregate([
+      {
+        $match: {
+          tenantId: tenantObjectId,
+          paymentDate: { $gte: start, $lte: end }
+        }
+      },
+      {
+        $group: {
+          _id: salaryDateGrouping,
+          expenses: { $sum: '$netSalary' }
+        }
       }
-    }
+    ]);
 
     console.log('Salaries data points:', salariesData.length);
 
@@ -924,41 +991,18 @@ exports.getChartData = async (req, res) => {
       dataMap.get(key).expenses += item.expenses || 0;
     });
 
-    // Add salaries (for monthly/quarterly)
-    if (granularity === 'monthly') {
-      salariesData.forEach(item => {
-        const key = getSortKey({ year: item._id.year, month: item._id.month }, granularity);
-        if (!dataMap.has(key)) {
-          dataMap.set(key, {
-            groupId: { year: item._id.year, month: item._id.month },
-            revenue: 0,
-            expenses: 0
-          });
-        }
-        dataMap.get(key).expenses += item.expenses || 0;
-      });
-    } else if (granularity === 'quarterly') {
-      // Aggregate salaries by quarter
-      const quarterlyMap = new Map();
-      salariesData.forEach(item => {
-        const key = `${item._id.year}-Q${item._id.quarter}`;
-        if (!quarterlyMap.has(key)) {
-          quarterlyMap.set(key, { year: item._id.year, quarter: item._id.quarter, expenses: 0 });
-        }
-        quarterlyMap.get(key).expenses += item.expenses || 0;
-      });
-      
-      quarterlyMap.forEach((value, key) => {
-        if (!dataMap.has(key)) {
-          dataMap.set(key, {
-            groupId: { year: value.year, quarter: value.quarter },
-            revenue: 0,
-            expenses: 0
-          });
-        }
-        dataMap.get(key).expenses += value.expenses || 0;
-      });
-    }
+    // Add salaries expenses
+    salariesData.forEach(item => {
+      const key = getSortKey(item._id, granularity);
+      if (!dataMap.has(key)) {
+        dataMap.set(key, {
+          groupId: item._id,
+          revenue: 0,
+          expenses: 0
+        });
+      }
+      dataMap.get(key).expenses += item.expenses || 0;
+    });
 
     // Convert map to sorted array
     const sortedKeys = Array.from(dataMap.keys()).sort();

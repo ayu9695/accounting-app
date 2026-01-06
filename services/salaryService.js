@@ -236,14 +236,17 @@ const processSalaryForPeriod = async (monthName, year, isRecalculation = false) 
       const baseSalary = emp.baseSalary;
       const salaryPaymentDate = emp.salaryPaymentDate || 1;
 
-      // NEW LOGIC: Only use baseSalary. Allowances/deductions are optional and provided during processing
+      // NEW LOGIC: Only use baseSalary. Allowances/reimbursements/deductions are optional and provided during processing
       // If not provided during processing, salary = baseSalary only
       const totalAllowances = 0; // Not read from Employee model anymore
+      const totalReimbursements = 0; // Not read from Employee model anymore
       const totalDeductions = 0; // Not read from Employee model anymore
 
-      // Salary calculation: baseSalary only (unless allowances/deductions provided during processing)
+      // Salary calculation: baseSalary only (unless allowances/reimbursements/deductions provided during processing)
+      // Gross salary = baseSalary + allowances (stays the same)
       const grossSalary = baseSalary; // Will be updated if allowances provided during processing
-      const netSalary = baseSalary;   // Will be updated if allowances/deductions provided during processing
+      // Net salary = grossSalary + reimbursements - deductions (payable amount)
+      const netSalary = baseSalary;   // Will be updated if allowances/reimbursements/deductions provided during processing
 
       // Calculate scheduled payment date
       const paymentDate = calculatePaymentDate(salaryPaymentDate, monthName, year);
@@ -269,8 +272,17 @@ const processSalaryForPeriod = async (monthName, year, isRecalculation = false) 
           continue;
         }
 
-        // Update existing record - preserve existing allowances/deductions if they exist
-        // Only update baseSalary and employeeName if changed
+        // Update existing record - preserve existing allowances/reimbursements/deductions if they exist
+        // Recalculate grossSalary and netSalary based on existing values
+        // Use aggregation pipeline to calculate based on existing field values
+        const existingAllowances = existingRecord.allowances || 0;
+        const existingReimbursements = existingRecord.reimbursements || 0;
+        const existingDeductions = existingRecord.deductions || 0;
+        
+        // Recalculate: grossSalary = baseSalary + allowances, netSalary = grossSalary + reimbursements - deductions
+        const recalculatedGrossSalary = baseSalary + existingAllowances;
+        const recalculatedNetSalary = recalculatedGrossSalary + existingReimbursements - existingDeductions;
+        
         bulkOps.push({
           updateOne: {
             filter: {
@@ -284,8 +296,10 @@ const processSalaryForPeriod = async (monthName, year, isRecalculation = false) 
               $set: {
                 employeeName: emp.name,
                 baseSalary: baseSalary,
-                // Preserve existing allowances/deductions - don't overwrite with 0
-                // Only update if they don't exist (new record scenario)
+                // Preserve existing allowances/reimbursements/deductions - don't overwrite
+                // Recalculate grossSalary and netSalary using existing values
+                grossSalary: recalculatedGrossSalary,
+                netSalary: recalculatedNetSalary,
                 salaryPaymentDate: salaryPaymentDate,
                 paymentDate: paymentDate,
                 defaultWorkingDays: defaultWorkingDays, // Set default working days
@@ -310,9 +324,10 @@ const processSalaryForPeriod = async (monthName, year, isRecalculation = false) 
                 employeeName: emp.name,
                 baseSalary: baseSalary,
                 allowances: totalAllowances, // 0 by default
+                reimbursements: totalReimbursements, // 0 by default
                 deductions: totalDeductions,  // 0 by default
-                grossSalary: grossSalary,     // = baseSalary
-                netSalary: netSalary,         // = baseSalary
+                grossSalary: grossSalary,     // = baseSalary (baseSalary + 0 allowances)
+                netSalary: netSalary,         // = baseSalary (grossSalary + 0 reimbursements - 0 deductions)
                 salaryPaymentDate: salaryPaymentDate,
                 paymentDate: paymentDate,
                 defaultWorkingDays: defaultWorkingDays, // Set default working days

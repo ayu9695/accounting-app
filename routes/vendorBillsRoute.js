@@ -3,6 +3,7 @@ const router = express.Router();
 const VendorBill = require('../models/VendorBill');
 const Vendor = require('../models/Vendor');
 const authMiddleware = require('../middleware/auth');
+const upload = require('../middleware/upload');
 const { now } = require('mongoose');
 
 // Apply authentication and tenant validation to all routes
@@ -64,6 +65,7 @@ router.get('/vendor-bills', async (req, res) => {
     const [vendorBills, totalCount] = await Promise.all([
       VendorBill.find(query)
         .populate('vendorId', 'name gstin email phone')
+        .populate('paymentMethod', 'code')
         .sort(sortConfig)
         .skip(skip)
         .limit(parseInt(limit))
@@ -95,9 +97,18 @@ router.get('/vendor-bills', async (req, res) => {
       fileName: bill.attachments?.[0]?.name || '',
       paymentDate: bill.paymentDate,
       pendingAmount: bill.pendingAmount,
-      paymentMethod: bill.paymentMethod,
+      paymentMethod: bill.paymentMethod?._id?.toString() || bill.paymentMethod,
+      paymentMethodName: bill.paymentMethod?.name || null,
       paymentReference: bill.paymentReference,
-      attachments: bill.attachments || []
+      attachments: (bill.attachments || []).map((att, index) => ({
+        _id: index,
+        name: att.name,
+        url: att.url,
+        type: att.type,
+        size: att.size,
+        uploadedAt: att.uploadedAt
+        // data field excluded - only included when downloading
+      }))
     }));
 
     console.log("returning : ", transformedBills);
@@ -131,7 +142,9 @@ router.get('/vendor-bills/:id', async (req, res) => {
     const vendorBill = await VendorBill.findOne({ 
       _id: id, 
       tenantId 
-    }).populate('vendorId', 'name gstin email phone address');
+    })
+      .populate('vendorId', 'name gstin email phone address')
+      .populate('paymentMethod', 'code');
 
     if (!vendorBill) {
       return res.status(404).json({
@@ -164,7 +177,8 @@ router.get('/vendor-bills/:id', async (req, res) => {
       fileName: vendorBill.attachments?.[0]?.name || '',
       paymentDate: vendorBill.paymentDate,
       pendingAmount: vendorBill.pendingAmount,
-      paymentMethod: vendorBill.paymentMethod,
+      paymentMethod: vendorBill.paymentMethod?._id?.toString() || vendorBill.paymentMethod,
+      paymentMethodName: vendorBill.paymentMethod?.name || null,
       paymentReference: vendorBill.paymentReference,
       attachments: vendorBill.attachments || []
     };
@@ -247,6 +261,7 @@ router.post('/vendor-bills', async (req, res) => {
         console.log("taxable: ", amount, " tds: ", tdsRate);
 
     await vendorBill.save();
+    await vendorBill.populate('paymentMethod', 'code');
 
     // Transform response
     const transformedBill = {
@@ -272,7 +287,8 @@ router.post('/vendor-bills', async (req, res) => {
       fileName: vendorBill.attachments?.[0]?.name || '',
       paymentDate: vendorBill.paymentDate,
       pendingAmount: vendorBill.pendingAmount,
-      paymentMethod: vendorBill.paymentMethod,
+      paymentMethod: vendorBill.paymentMethod?._id?.toString() || vendorBill.paymentMethod,
+      paymentMethodName: vendorBill.paymentMethod?.name || null,
       paymentReference: vendorBill.paymentReference,
       attachments: vendorBill.attachments || []
     };
@@ -300,7 +316,8 @@ router.put('/vendor-bills/:id', async (req, res) => {
     const updates = req.body;
     console.log("id is : ", id);
 
-    const vendorBill = await VendorBill.findOne({ _id: id, tenantId });
+    const vendorBill = await VendorBill.findOne({ _id: id, tenantId })
+      .populate('paymentMethod', 'code name');
     
     if (!vendorBill) {
       return res.status(401).json({
@@ -318,6 +335,9 @@ router.put('/vendor-bills/:id', async (req, res) => {
 
     vendorBill.updatedAt = new Date();
     await vendorBill.save();
+    
+    // Re-populate after save to get updated paymentMethod
+    await vendorBill.populate('paymentMethod', 'code name');
 
     // Transform response
     const transformedBill = {
@@ -370,7 +390,8 @@ router.put('/vendor-bills/payment/:id', async (req, res) => {
     const updates = req.body;
     console.log("id is : ", id);
 
-    const vendorBill = await VendorBill.findOne({ _id: id, tenantId });
+    const vendorBill = await VendorBill.findOne({ _id: id, tenantId })
+      .populate('paymentMethod', 'code');
     
     if (!vendorBill) {
       return res.status(401).json({
@@ -424,6 +445,9 @@ router.put('/vendor-bills/payment/:id', async (req, res) => {
 
     vendorBill.updatedAt = new Date();
     await vendorBill.save();
+    
+    // Re-populate after save to get updated paymentMethod
+    await vendorBill.populate('paymentMethod', 'code');
 
     // Transform response
     const transformedBill = {
@@ -449,7 +473,8 @@ router.put('/vendor-bills/payment/:id', async (req, res) => {
       fileName: vendorBill.attachments?.[0]?.name || '',
       paymentDate: vendorBill.paymentDate,
       pendingAmount: vendorBill.pendingAmount,
-      paymentMethod: vendorBill.paymentMethod,
+      paymentMethod: vendorBill.paymentMethod?._id?.toString() || vendorBill.paymentMethod,
+      paymentMethodName: vendorBill.paymentMethod?.name || null,
       paymentReference: vendorBill.paymentReference,
       attachments: vendorBill.attachments || []
     };
@@ -489,9 +514,23 @@ router.delete('/vendor-bills/:id', async (req, res) => {
         message: 'Vendor bill not found'
       });
     }
+    
+    // Soft-delete: set archive and deletedStatus to true
     vendorBill.archive = true;
     vendorBill.deletedStatus = true;
-    vendorBill.save();
+    vendorBill.isActive = false;
+    vendorBill.updatedAt = new Date();
+
+    // Log to updateHistory
+    vendorBill.updateHistory.push({
+      attribute: 'deletedStatus',
+      oldValue: false,
+      newValue: true,
+      updatedAt: new Date(),
+      updatedBy: req.user.userId
+    });
+
+    await vendorBill.save();
 
     res.json({
       success: true,
@@ -502,6 +541,203 @@ router.delete('/vendor-bills/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to delete vendor bill',
+      error: error.message
+    });
+  }
+});
+
+// POST /api/vendor-bills/:id/upload - Upload PDF for vendor bill
+router.post('/vendor-bills/:id/upload', upload.single('pdf'), async (req, res) => {
+  try {
+    const { tenantId, userId } = req.user;
+    const { id } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No PDF file uploaded'
+      });
+    }
+
+    const vendorBill = await VendorBill.findOne({ _id: id, tenantId });
+    
+    if (!vendorBill) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vendor bill not found'
+      });
+    }
+
+    // Create attachment object - store entire PDF in MongoDB
+    const attachment = {
+      name: req.file.originalname,
+      url: `/api/vendor-bills/${id}/download/${vendorBill.attachments.length}`, // URL to download
+      data: req.file.buffer, // Store entire PDF as Buffer in MongoDB
+      contentType: 'application/pdf',
+      type: 'pdf',
+      size: req.file.size,
+      uploadedAt: new Date(),
+      uploadedBy: userId
+    };
+
+    // Add to attachments array
+    vendorBill.attachments.push(attachment);
+    
+    // Update fileName if it's the first attachment
+    if (!vendorBill.fileName) {
+      vendorBill.fileName = req.file.originalname;
+    }
+
+    await vendorBill.save();
+    await vendorBill.populate('paymentMethod', 'code');
+
+    // Transform response
+    const transformedBill = {
+      _id: vendorBill._id.toString(),
+      vendorId: vendorBill.vendorId?._id?.toString() || vendorBill.vendorId,
+      vendorName: vendorBill.vendorName || vendorBill.vendorId?.name,
+      billNumber: vendorBill.billNumber,
+      billDate: vendorBill.billDate,
+      dueDate: vendorBill.dueDate,
+      uploadDate: vendorBill.createdAt,
+      totalAmount: vendorBill.total || vendorBill.amount,
+      amount: vendorBill.amount,
+      taxableAmount: vendorBill.amount,
+      cgst: vendorBill.cgst,
+      sgst: vendorBill.sgst,
+      igst: 0,
+      tdsAmount: vendorBill.tdsAmount,
+      tdsRate: vendorBill.tdsRate,
+      payableAmount: vendorBill.payableAmount,
+      status: vendorBill.status === 'unpaid' ? 'pending' : vendorBill.status,
+      paymentStatus: vendorBill.paymentStatus,
+      description: vendorBill.notes || '',
+      fileName: vendorBill.fileName,
+      paymentDate: vendorBill.paymentDate,
+      pendingAmount: vendorBill.pendingAmount,
+      paymentMethod: vendorBill.paymentMethod?._id?.toString() || vendorBill.paymentMethod,
+      paymentMethodName: vendorBill.paymentMethod?.name || null,
+      paymentReference: vendorBill.paymentReference,
+      attachments: vendorBill.attachments.map((att, index) => ({
+        _id: index,
+        name: att.name,
+        url: att.url,
+        type: att.type,
+        size: att.size,
+        uploadedAt: att.uploadedAt
+      }))
+    };
+
+    res.json({
+      success: true,
+      message: 'PDF uploaded successfully',
+      vendorBill: transformedBill
+    });
+  } catch (error) {
+    console.error('Error uploading PDF:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload PDF',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/vendor-bills/:id/download/:attachmentId - Download PDF
+router.get('/vendor-bills/:id/download/:attachmentId', async (req, res) => {
+  try {
+    const { tenantId } = req.user;
+    const { id, attachmentId } = req.params;
+
+    // Query vendor bill - data field will be included automatically
+    const vendorBill = await VendorBill.findOne({ _id: id, tenantId });
+    
+    if (!vendorBill) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vendor bill not found'
+      });
+    }
+
+    const attachmentIndex = parseInt(attachmentId);
+    if (isNaN(attachmentIndex) || attachmentIndex < 0 || attachmentIndex >= vendorBill.attachments.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Attachment not found'
+      });
+    }
+
+    const attachment = vendorBill.attachments[attachmentIndex];
+    
+    if (!attachment || !attachment.data) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found'
+      });
+    }
+
+    // Send PDF directly from MongoDB
+    res.setHeader('Content-Type', attachment.contentType || 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${attachment.name}"`);
+    res.setHeader('Content-Length', attachment.size);
+    res.send(attachment.data);
+  } catch (error) {
+    console.error('Error downloading PDF:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to download PDF',
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/vendor-bills/:id/attachments/:attachmentId - Delete attachment
+router.delete('/vendor-bills/:id/attachments/:attachmentId', async (req, res) => {
+  try {
+    const { tenantId } = req.user;
+    const { id, attachmentId } = req.params;
+
+    const vendorBill = await VendorBill.findOne({ _id: id, tenantId });
+    
+    if (!vendorBill) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vendor bill not found'
+      });
+    }
+
+    const attachmentIndex = parseInt(attachmentId);
+    if (isNaN(attachmentIndex) || attachmentIndex < 0 || attachmentIndex >= vendorBill.attachments.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Attachment not found'
+      });
+    }
+
+    const attachment = vendorBill.attachments[attachmentIndex];
+    
+    // Remove from attachments array
+    // PDF data will be automatically removed when document is saved
+    vendorBill.attachments.splice(attachmentIndex, 1);
+    
+    // Update fileName if it was the deleted attachment
+    if (vendorBill.fileName === attachment.name && vendorBill.attachments.length > 0) {
+      vendorBill.fileName = vendorBill.attachments[0].name;
+    } else if (vendorBill.attachments.length === 0) {
+      vendorBill.fileName = null;
+    }
+
+    await vendorBill.save();
+
+    res.json({
+      success: true,
+      message: 'Attachment deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting attachment:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete attachment',
       error: error.message
     });
   }

@@ -9,6 +9,7 @@ const SalaryRecordSchema = new Schema({
   year: { type: Number, required: true },
   baseSalary: { type: Number, required: true },
   allowances: { type: Number },
+  reimbursements: { type: Number, default: 0 },
   deductions: { type: Number },
   leaveDays: { type: Number, default: 0 },
   workingDays: { type: Number},
@@ -24,7 +25,7 @@ const SalaryRecordSchema = new Schema({
   salaryPaymentDate: { type: Number, default: 1, min: 1, max: 28 }, // Day of month copied from employee
   paidOn: { type: Date }, // Actual date when salary was paid
   paymentDate: { type: Date }, // Scheduled payment date (for filtering in dashboard)
-  paymentMethod: { type: String },
+  paymentMethod: { type: Schema.Types.ObjectId, ref: 'PaymentMethod' },
   paymentReference: { type: String },
   processedAt: { type: Date },
   processedBy: { type: Schema.Types.ObjectId, ref: 'User' },

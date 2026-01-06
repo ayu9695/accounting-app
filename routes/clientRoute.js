@@ -16,10 +16,13 @@ router.post('clients/:id/contacts', authMiddleware, clientsController.updateClie
 router.post('/client-contacts/:id', authMiddleware, clientsController.addClientContact);
 
 // Update client by ID
-router.put('/clients/:name', authMiddleware, clientsController.updateClient);
+router.put('/clients/:id', authMiddleware, clientsController.updateClient);
 
-// Delete client by ID
-router.delete('/clients/:name', authMiddleware, clientsController.deleteClient);
+// Activate client (set isActive = true) by ID
+router.post('/clients/:id/activate', authMiddleware, clientsController.activateClient);
+
+// Delete client by name (soft delete)
+router.delete('/clients/:id', authMiddleware, clientsController.deleteClient);
 
 
 module.exports = router;

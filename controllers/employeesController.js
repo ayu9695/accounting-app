@@ -4,7 +4,10 @@ const Employee = require('../models/Employee');
 exports.getAllEmployees = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const employees = await Employee.find({ tenantId })
+    const employees = await Employee.find({ 
+      tenantId,
+      isActive: { $ne: false }
+    })
       .sort({ name: 1 });
     return res.json(employees);
   } catch (error) {
@@ -18,7 +21,11 @@ exports.getEmployeeByEmail = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const employeeEmail = req.params.email;
-    const employee = await Employee.findOne({ email: employeeEmail, tenantId })
+    const employee = await Employee.findOne({ 
+      email: employeeEmail, 
+      tenantId,
+      isActive: { $ne: false }
+    })
       .populate('department', 'name')
       .populate('designation', 'name');
     if (!employee) return res.status(404).json({ error: 'Employee not found' });
@@ -99,9 +106,24 @@ exports.deleteEmployee = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const employeeId = req.body.id;
-    const employee = await Employee.findOneAndDelete({ _id: employeeId, tenantId });
+    const employee = await Employee.findOne({ _id: employeeId, tenantId });
     if (!employee) return res.status(404).json({ error: 'Employee not found' });
-    return res.json({ message: 'Employee deleted successfully' });
+
+    // Soft-delete: set isActive to false
+    employee.isActive = false;
+    employee.updatedAt = new Date();
+
+    // Log to updateHistory
+    employee.updateHistory.push({
+      attribute: 'isActive',
+      oldValue: true,
+      newValue: false,
+      updatedAt: new Date(),
+      updatedBy: req.user.userId
+    });
+
+    await employee.save();
+    return res.json({ message: 'Employee soft-deleted successfully' });
   } catch (error) {
     console.error('Error deleting employee:', error);
     return res.status(500).json({ error: 'Server error deleting employee' });

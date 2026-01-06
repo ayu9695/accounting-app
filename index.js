@@ -21,6 +21,7 @@ app.use(cors({
 app.use(cookieParser()); // ✅ Add this near top
 app.use(express.json()); // Required to read JSON bodies
 app.use('/public', express.static('public'));
+app.use('/uploads', express.static('uploads')); // Serve uploaded files
 
 // === Auto-register all routes in routes/ ===
 const routesPath = path.join(__dirname, 'routes');
