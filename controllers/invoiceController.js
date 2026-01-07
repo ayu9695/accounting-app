@@ -344,9 +344,7 @@ exports.createInvoice = async (req, res) => {
     }
 
     const newInvoice = new Invoice(newInvoiceData);
-    if (newInvoice.total !== undefined) {
-      newInvoice.remainingAmount = newInvoice.total;
-    }
+    // remainingAmount will be calculated in pre-save hook based on tdsTotal
     await newInvoice.save();
 
     return res.status(201).json(newInvoice);
@@ -630,26 +628,18 @@ exports.updatePaymentForInvoice = async (req, res) => {
         const returnVal = ('Cannot make payment more than remaining amount : ', invoice.remainingAmount);
         return res.status(500).json({ error: returnVal });
       }
-    // } else if (invoice.remainingAmount == 0 ) {
-    //   const invoiceStatus = invoice.status;
-    //   console.log("invoice Status is : ", invoiceStatus, ". Updating to paid.");
-    //     invoice.status= 'paid';
-    //     invoiceService.logUpdateHistory(invoice, req.user.userId, 'status', invoiceStatus, 'paid')
-    //     await invoice.save();
-    //     return res.status(201).json(invoice);
-    // }
     invoice.remainingAmount = remainingAmount;
     console.log("remaining amount is : ", remainingAmount);
     if (invoice.remainingAmount == 0 ) {
         invoice.status= 'paid';
         invoice.paidAmount += paidAmount;
         invoiceService.logPaymentHistory(invoice, req.user.userId, paidAmount, new Date(), updates.paymentMethod, updates.reference, updates.notes);
-        if ( invoice.paidAmount == invoice.total ) {
+        if ( invoice.paidAmount == invoice.payableAmount ) {
           await invoice.save();
           return res.status(201).json(invoice);
         }
-        console.error('Please check total paid amount : ', invoice.paidAmount , " is more than the total amount : ", invoice.total);
-        const returnVal = ('Please check total paid amount : ', invoice.paidAmount , " is more than the total amount : ", invoice.total);
+        console.error('Please check total paid amount : ', invoice.paidAmount , " is more than the total amount : ", invoice.tdsAmount);
+        const returnVal = ('Please check total paid amount : ', invoice.paidAmount , " is more than the total amount : ", invoice.tdsAmount);
         return res.status(500).json({ error: returnVal });
     } else if (invoice.remainingAmount > 0 ) {
       invoice.status= 'partial';
