@@ -26,7 +26,7 @@ const VendorSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
     }],
     notes: {type: String},
-    isActive: {type: Boolean},
+    isActive: {type: Boolean, default: true},
     country: {type: String, default:"India" },
     createdBy: {type: Schema.Types.ObjectId, ref: 'User'},
     createdAt: { type: Date, default: Date.now },

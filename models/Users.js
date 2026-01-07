@@ -24,7 +24,7 @@ const UserSchema = new mongoose.Schema({
     role: { type: String, enum: ['superadmin', 'admin', "team_member"], required: true},
     avatar:{type: String},
     phone:{type: String},
-    isActive:{type: Boolean}, 
+    isActive:{type: Boolean, default: true}, 
     status:{type: String, enum: ['active', 'deactivated', 'permanently_deleted'], default: 'active'},
     address: { type: String },
     createdAt: { type: Date, default: Date.now },

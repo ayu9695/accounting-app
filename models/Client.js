@@ -32,6 +32,7 @@ const ClientSchema = new mongoose.Schema({
   notes: {type: String},
   isActive: {type: Boolean, default: true},
   country: {type: String, default:"India" },
+  tdsDeducted: { type: Number, enum: [2, 10] },
   createdBy: {type: Schema.Types.ObjectId, ref: 'User'},
   updateHistory: [{
   attribute: { type: String, required: true },
