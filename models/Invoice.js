@@ -77,9 +77,8 @@ InvoiceSchema.index({ tenantId: 1, clientName: 1 });
 InvoiceSchema.pre('save', function(next) {
     // Check if we need to recalculate tax/subtotal (new document or relevant fields modified)
     const isNew = this.isNew;
-    const taxFieldsChanged = isNew || 
-        this.isModified('subtotal') || 
-        this.isModified('cgst') || 
+    const subtotalChanged = this.isModified('subtotal');
+    const taxFieldsChanged = this.isModified('cgst') || 
         this.isModified('sgst') || 
         this.isModified('igst') || 
         this.isModified('discount');
@@ -104,41 +103,39 @@ InvoiceSchema.pre('save', function(next) {
     
     if (shouldCalculateTds) {
         // Check if tdsTotal is already set, if not check if tdsDeducted exists
-        if (this.tdsTotal == null || this.tdsTotal === undefined) {
+            console.log("tdsTotal is not set. Checking tdsDeducted to calculate tdsTotal...");
             // tdsTotal not set - check if tdsDeducted exists and calculate
             if (this.tdsDeducted != null && this.tdsDeducted !== undefined && this.tdsDeducted !== 0) {
-                // Calculate: ((subtotal * tdsDeducted)/100) + taxAmount
-                const tdsOnSubtotal = ((this.subtotal || 0) * this.tdsDeducted) / 100;
-                this.tdsTotal = tdsOnSubtotal + (this.taxAmount || 0);
-            } else {
-                // If no TDS deducted, tdsTotal should equal total
-                this.tdsTotal = this.total || 0;
+                this.tdsTotal = ((this.subtotal || 0) * this.tdsDeducted) / 100;
+                console.log("Calculated tdsTotal based on tdsDeducted:", this.tdsTotal);
             }
-        } else if (taxFieldsChanged || tdsDeductedChanged) {
-            // tdsTotal was set but tax/subtotal/tdsDeducted changed - recalculate
-            if (this.tdsDeducted != null && this.tdsDeducted !== undefined && this.tdsDeducted !== 0) {
-                const tdsOnSubtotal = ((this.subtotal || 0) * this.tdsDeducted) / 100;
-                this.tdsTotal = tdsOnSubtotal + (this.taxAmount || 0);
-                this.payableAmount = this.total - this.tdsTotal;
-            } else {
-                // If no TDS deducted, tdsTotal should equal total
-                this.tdsTotal = this.total || 0;
-            }
-        }
     }
 
+    if (isNew) {
+        this.payableAmount = this.total - this.tdsTotal;
+    } else if (tdsDeductedChanged) {
+        this.payableAmount = this.total - this.tdsTotal;
+        this.remainingAmount = this.payableAmount - this.paidAmount;
+    }
+
+    console.log("=== Invoice Pre-Save ===");
+    console.log("subtotal:", this.subtotal);
+    console.log("discount:", this.discount, "| discountAmount:", this.discountAmount, "| discountedAmount:", this.discountedAmount);
+    console.log("cgst:", this.cgst, "| sgst:", this.sgst, "| igst:", this.igst, "| taxAmount:", this.taxAmount);
+    console.log("total:", this.total);
+    console.log("tdsDeducted:", this.tdsDeducted, "| tdsTotal:", this.tdsTotal);
+    console.log("payableAmount:", this.payableAmount);
+    console.log("paidAmount:", this.paidAmount);
+    console.log("tdstotalValue:", this.tdsTotal);
+    console.log("=======================");
     // Calculate remainingAmount
     // Initially (new invoice): remainingAmount = total - tdsTotal
     // For updates: if empty, calculate as total - tdsTotal, then remainingAmount = tdsTotal - paidAmount
-    const tdsTotalValue = this.tdsTotal != null && this.tdsTotal !== undefined ? this.tdsTotal : (this.total || 0);
-    const totalValue = this.total || 0;
-    
     // Initially or if empty: remainingAmount = total - tdsTotal
     if (isNew || this.remainingAmount == null || this.remainingAmount === undefined) {
-        this.remainingAmount = totalValue - tdsTotalValue;
+        this.remainingAmount = this.total - this.tdsTotal;
     }
 
-    console.log("saved invoice tax");
     next();
 });
 

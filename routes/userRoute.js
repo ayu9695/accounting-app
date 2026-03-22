@@ -7,33 +7,37 @@ const userController = require('../controllers/userController');
 // GET /api/user - get current authenticated user
 router.get('/user', authMiddleware, userController.getCurrentUser);
 
-// GET /api/users
+// GET /api/users - get all users in tenant
 router.get('/users', authMiddleware, userController.getAllUsers);
 
-// Get single user by ID
+// GET /api/user/:id - get single user by ID
 router.get('/user/:id', authMiddleware, userController.getUserById);
+
+// GET /api/profile?email=... - get user by email
 router.get('/profile', authMiddleware, userController.getUserByEmail);
 
-// Create a user
-// router.post('/user', authMiddleware, userController.createUser);
+// POST /api/user-management - create user (superadmin only)
 router.post('/user-management', authMiddleware, checkRole(['superadmin']), userController.superAdminCreateUser);
 
-// Special endpoint for onboarding first superadmin (NO AUTH REQUIRED)
+// POST /api/users/onboard-superadmin - first superadmin setup (no auth)
 router.post('/users/onboard-superadmin', userController.onboardSuperAdmin);
 
-
-//Update password (admin-only)
+// POST /api/admin/user-password - admin: update any user's password
 router.post('/admin/user-password', authMiddleware, checkRole(['superadmin', 'admin']), userController.updatePassword);
+
+// POST /api/user/password - update own password
 router.post('/user/password', authMiddleware, userController.updateUserPassword);
 
-router.post('/users/toggle-status', authMiddleware, userController.toggleUserStatus);
+// POST /api/users/toggle-status - toggle user active/inactive (admin only)
+router.post('/users/toggle-status', authMiddleware, checkRole(['superadmin', 'admin']), userController.toggleUserStatus);
 
-
-// Update user by ID
+// PUT /api/user/:id - update user
 router.put('/user/:id', authMiddleware, userController.updateUser);
 
-// Delete user by ID
-router.delete('/admin/user', authMiddleware, userController.deleteUser);
+// DELETE /api/admin/user - hard delete (admin only)
+router.delete('/admin/user', authMiddleware, checkRole(['superadmin', 'admin']), userController.deleteUser);
+
+// DELETE /api/user - deactivate own account
 router.delete('/user', authMiddleware, userController.deactivateUser);
 
 module.exports = router;
