@@ -15,11 +15,10 @@ const FRONTEND_URL = process.env.FRONTEND_URL;
 app.use(express.json());
 const cors = require('cors');
 app.use(cors({
-  origin: FRONTEND_URL, // your frontend URL
-  credentials: true               // allow cookies to be sent
+  origin: FRONTEND_URL,
+  credentials: true
 }));
-app.use(cookieParser()); // ✅ Add this near top
-app.use(express.json()); // Required to read JSON bodies
+app.use(cookieParser());
 app.use('/public', express.static('public'));
 app.use('/uploads', express.static('uploads')); // Serve uploaded files
 

@@ -5,14 +5,7 @@ const invoiceService = require('../services/invoiceService');
 const path = require('path');
 const puppeteer = require('puppeteer');
 const PDFDocument = require('pdfkit');
-
-const FALLBACK_BANK = {
-  accountName: 'Witarist IT Services Pvt. Ltd.',
-  accountNumber: '123456789012',
-  bankName: 'IDFC Bank',
-  ifscCode: 'IDFC0001234',
-  branch: 'MG Road Branch'
-};
+const logger = require('../utils/logger');
 
 const logoPath = path.resolve(__dirname, '../public/logo.jpeg');
 // GET /api/invoices
@@ -28,7 +21,7 @@ exports.getAllInvoices = async (req, res) => {
       .sort({ issueDate: -1 });
     return res.json(invoices);
   } catch (error) {
-    console.error('Error fetching invoices:', error);
+    logger.error('Error fetching invoices:', error);
     return res.status(500).json({ error: 'Server error fetching invoices' });
   }
 };
@@ -45,11 +38,11 @@ exports.getInvoiceById = async (req, res) => {
       deletedStatus: { $ne: true }
     })
       .populate('paymentHistory.paymentMethod', 'code');
-    console.log("fetching invoice");
+    logger.debug("fetching invoice");
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
     return res.json(invoice);
   } catch (error) {
-    console.error('Error fetching invoice by ID:', error);
+    logger.error('Error fetching invoice by ID:', error);
     return res.status(500).json({ error: 'Server error fetching invoice' });
   }
 };
@@ -72,7 +65,7 @@ exports.getInvoicesByClient = async (req, res) => {
 
     return res.json(invoices);
   } catch (error) {
-    console.error('Error fetching invoices by client:', error);
+    logger.error('Error fetching invoices by client:', error);
     return res.status(500).json({ error: 'Server error fetching invoices by client' });
   }
 };
@@ -132,7 +125,7 @@ exports.getInvoicesByDateRange = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching invoices by date range:', error);
+    logger.error('Error fetching invoices by date range:', error);
     return res.status(500).json({ error: 'Server error fetching invoices by date range' });
   }
 };
@@ -143,7 +136,7 @@ exports.getGstBilledByMonth = async (req, res) => {
     const createdBy = req.user.userId;   // From FE input
     const { month } = req.body;          // The crucial month input (e.g., "2025-06")
 
-    console.log("fetching tax");
+    logger.debug("fetching tax");
     // --- 2. Input Validation ---
     if (!tenantId || !createdBy || !month) {
         return res.status(400).json({ 
@@ -160,7 +153,7 @@ exports.getGstBilledByMonth = async (req, res) => {
 
     // --- 3. Calculate Date Range for Filtering ---
     try {
-console.log("month is : ", month);
+logger.debug("month is : ", month);
         const [monthIndex, year] = month.split('-').map(Number);
         
         // Start date: The 1st day of the specified month
@@ -212,7 +205,7 @@ console.log("month is : ", month);
         });
 
     } catch (error) {
-        console.error('Error fetching total tax amount:', error);
+        logger.error('Error fetching total tax amount:', error);
         return res.status(500).json({ 
             message: 'An error occurred while processing your request.', 
             error: error.message 
@@ -231,13 +224,13 @@ exports.createInvoice = async (req, res) => {
       tenantId,
       createdBy
     };
-    console.log("incoice data received : ", newInvoiceData);
+    logger.debug("incoice data received : ", newInvoiceData);
     const clientId = newInvoiceData.clientId;
     const client = await Client.findOne({ _id: clientId, tenantId });
     if (!client) {
       return res.status(404).json({ error: 'Client not found' });
     }
-    console.log(" updating client : ", client);
+    logger.debug(" updating client : ", client);
 
     const fieldMap = {
         // Incoming Key      : Model Key (based on your 'updating client' object)
@@ -251,20 +244,20 @@ exports.createInvoice = async (req, res) => {
 
     // Iterate over the keys expected in the incoming data
     for (const incomingField in fieldMap) {
-      console.log("incoming field : ", incomingField, " field map : ", fieldMap);
+      logger.debug("incoming field : ", incomingField, " field map : ", fieldMap);
         
         // The corresponding field name in the database model
         const modelField = fieldMap[incomingField]; 
-        console.log("model field : ",modelField);
+        logger.debug("model field : ",modelField);
 
         // Get the value from the new invoice data
         // Use String() and trim() for normalization
         const newValue = newInvoiceData[incomingField] ? String(newInvoiceData[incomingField]).trim() : '';
-        console.log("newValue", newValue);
+        logger.debug("newValue", newValue);
 
         // Get the value from the existing client model
         const existingValue = client[modelField] ? String(client[modelField]).trim() : '';
-        console.log("existingValue",existingValue);
+        logger.debug("existingValue",existingValue);
         
         // 🚨 CRITICAL CHECK:
         // 1. Is the new value non-empty/non-null? (newValue.length > 0)
@@ -275,17 +268,17 @@ exports.createInvoice = async (req, res) => {
             updates[modelField] = newValue; 
             changesFound = true;
             
-            console.log(`- Change detected for ${modelField}: '${existingValue}' -> '${newValue}'`);
+            logger.debug(`- Change detected for ${modelField}: '${existingValue}' -> '${newValue}'`);
         }
     }
 
     // 4. Apply Updates
     if (changesFound) {
-        console.log("Applying updates:", updates);
+        logger.debug("Applying updates:", updates);
         await Client.findByIdAndUpdate(clientId, { $set: updates }, { new: true });
     }
 
-    console.log("updated client : ", client);
+    logger.debug("updated client : ", client);
     const existingInvoice = await Invoice.findOne({ tenantId, invoiceNumber: newInvoiceData.invoiceNumber });
     if (existingInvoice) {
       return res.status(400).json({ error: 'Invoice with this number already exists in this tenant' });
@@ -349,7 +342,7 @@ exports.createInvoice = async (req, res) => {
 
     return res.status(201).json(newInvoice);
   } catch (error) {
-    console.error('Error creating invoice:', error);
+    logger.error('Error creating invoice:', error);
     return res.status(500).json({ error: 'Server error creating invoice' });
   }
 };
@@ -370,7 +363,7 @@ exports.createInvoice = async (req, res) => {
 //     if (!client) {
 //       return res.status(404).json({ error: 'Client not found' });
 //     }
-//     console.log(" updating client : ", client);
+//     logger.debug(" updating client : ", client);
 
 //     const fieldMap = {
 //         email: 'clientEmail', 
@@ -383,20 +376,20 @@ exports.createInvoice = async (req, res) => {
 
 //     // Iterate over the keys expected in the incoming data
 //     for (const incomingField in fieldMap) {
-//       console.log("incoming field : ", incomingField);
+//       logger.debug("incoming field : ", incomingField);
         
 //         // The corresponding field name in the database model
 //         const modelField = fieldMap[incomingField]; 
-//         console.log("model field : ",modelField);
+//         logger.debug("model field : ",modelField);
 
 //         // Get the value from the new invoice data
 //         // Use String() and trim() for normalization
 //         const newValue = updates[incomingField] ? String(updates[incomingField]).trim() : '';
-//         console.log("newValue", newValue);
+//         logger.debug("newValue", newValue);
 
 //         // Get the value from the existing client model
 //         const existingValue = client[modelField] ? String(client[modelField]).trim() : '';
-//         console.log("existingValue",existingValue);
+//         logger.debug("existingValue",existingValue);
         
 //         // 🚨 CRITICAL CHECK:
 //         // 1. Is the new value non-empty/non-null? (newValue.length > 0)
@@ -407,19 +400,19 @@ exports.createInvoice = async (req, res) => {
 //             Clientupdates[modelField] = newValue; 
 //             changesFound = true;
             
-//             console.log(`- Change detected for ${modelField}: '${existingValue}' -> '${newValue}'`);
+//             logger.debug(`- Change detected for ${modelField}: '${existingValue}' -> '${newValue}'`);
 //         }
 //     }
 
 //     // 4. Apply Updates
 //     if (changesFound) {
-//         console.log("Applying updates:", Clientupdates);
+//         logger.debug("Applying updates:", Clientupdates);
 //         await Client.findByIdAndUpdate(clientId, { $set: Clientupdates }, { new: true });
 //     }
 
-//     console.log("updated client : ", client);
+//     logger.debug("updated client : ", client);
 
-//     console.log("incoice data received : ", updates);
+//     logger.debug("incoice data received : ", updates);
 
 //     Object.keys(updates).forEach((key) => {
 //       if (invoice[key] !== updates[key]) {
@@ -441,7 +434,7 @@ exports.createInvoice = async (req, res) => {
 
 //     return res.json(invoice);
 //   } catch (error) {
-//     console.error('Error updating invoice:', error);
+//     logger.error('Error updating invoice:', error);
 //     return res.status(500).json({ error: 'Server error updating invoice' });
 //   }
 // };
@@ -489,16 +482,16 @@ exports.updateInvoice = async (req, res) => {
       if (newValue.length > 0 && existingValue !== newValue) {
         Clientupdates[modelField] = newValue;
         changesFound = true;
-        console.log(`- Change detected for ${modelField}: '${existingValue}' -> '${newValue}'`);
+        logger.debug(`- Change detected for ${modelField}: '${existingValue}' -> '${newValue}'`);
       }
     }
 
     if (changesFound) {
-      console.log("Applying client updates:", Clientupdates);
+      logger.debug("Applying client updates:", Clientupdates);
       await Client.findByIdAndUpdate(client._id, { $set: Clientupdates }, { new: true });
     }
 
-    console.log("invoice update payload:", updates);
+    logger.debug("invoice update payload:", updates);
 
     // Normalizer reused from create (or inline copy)
     const normalizeLineItem = (it) => {
@@ -598,7 +591,7 @@ exports.updateInvoice = async (req, res) => {
 
     return res.json(invoice);
   } catch (error) {
-    console.error('Error updating invoice:', error);
+    logger.error('Error updating invoice:', error);
     return res.status(500).json({ error: 'Server error updating invoice' });
   }
 };
@@ -612,24 +605,19 @@ exports.updatePaymentForInvoice = async (req, res) => {
 
     const updates = req.body;
 
-    console.log("incoice data received : ", updates);
+    logger.debug("incoice data received : ", updates);
 
-    const fieldMap = {
-        // Incoming Key      : Model Key (based on your 'updating client' object)
-        'total': 'total',       
-        'paidAmount': 'paidAmount'
-    };
-    console.log("saving paid amount : ", updates.paidAmount);
+    logger.debug("saving paid amount : ", updates.paidAmount);
     const paidAmount = updates.paidAmount;
     const remainingAmount = invoice.remainingAmount - paidAmount;
-    console.log("invoice remaining amount is : ", invoice.remainingAmount);
+    logger.debug("invoice remaining amount is : ", invoice.remainingAmount);
       if (remainingAmount <0){
-        console.error('Cannot make payment more than remaining amount : ', invoice.remainingAmount);
+        logger.error('Cannot make payment more than remaining amount : ', invoice.remainingAmount);
         const returnVal = ('Cannot make payment more than remaining amount : ', invoice.remainingAmount);
         return res.status(500).json({ error: returnVal });
       }
     invoice.remainingAmount = remainingAmount;
-    console.log("remaining amount is : ", remainingAmount);
+    logger.debug("remaining amount is : ", remainingAmount);
     if (invoice.remainingAmount == 0 ) {
         invoice.status= 'paid';
         invoice.paidAmount += paidAmount;
@@ -638,7 +626,7 @@ exports.updatePaymentForInvoice = async (req, res) => {
           await invoice.save();
           return res.status(201).json(invoice);
         }
-        console.error('Please check total paid amount : ', invoice.paidAmount , " is more than the total amount : ", invoice.tdsAmount);
+        logger.error('Please check total paid amount : ', invoice.paidAmount , " is more than the total amount : ", invoice.tdsAmount);
         const returnVal = ('Please check total paid amount : ', invoice.paidAmount , " is more than the total amount : ", invoice.tdsAmount);
         return res.status(500).json({ error: returnVal });
     } else if (invoice.remainingAmount > 0 ) {
@@ -647,10 +635,10 @@ exports.updatePaymentForInvoice = async (req, res) => {
       await invoice.save();
       return res.status(201).json(invoice);
     }
-    console.error('No conditions matched:', error);
+    logger.error('No conditions matched:', error);
     return res.status(500).json({ error: 'Server error updating invoice' });
   } catch (error) {
-    console.error('Error updating invoice:', error);
+    logger.error('Error updating invoice:', error);
     return res.status(500).json({ error: 'Server error updating invoice' });
   }
 };
@@ -681,7 +669,7 @@ exports.deleteInvoice = async (req, res) => {
     await invoice.save();
     return res.json({ message: 'Invoice soft-deleted successfully' });
   } catch (error) {
-    console.error('Error deleting invoice:', error);
+    logger.error('Error deleting invoice:', error);
     return res.status(500).json({ error: 'Server error deleting invoice' });
   }
 };
@@ -691,7 +679,7 @@ exports.getInvoicePDF = async (req, res) => {
     const tenantId = req.user.tenantId;
     const invoiceNumber = req.params.invoiceNumber;
     const invoice = await Invoice.findOne({ invoiceNumber: invoiceNumber, tenantId });
-    console.log("fetching invoice for PDF");
+    logger.debug("fetching invoice for PDF");
     if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
 
     const doc = new PDFDocument({ size: 'A4', margin: 36 });
@@ -702,10 +690,10 @@ exports.getInvoicePDF = async (req, res) => {
     // Pipe pdf to response
     doc.pipe(res);
     try {
-      doc.image(LOGO_PATH, 48, 40, { width: 90 });
+      doc.image(logoPath, 48, 40, { width: 90 });
     } catch (err) {
       // if logo path invalid, continue without crashing
-      console.warn('Logo not found or unreadable at', LOGO_PATH);
+      logger.warn('Logo not found or unreadable at', logoPath);
     }
 
     // Header text
@@ -729,6 +717,7 @@ exports.getInvoicePDF = async (req, res) => {
     doc.font('Helvetica').moveDown(1);
 
     // Bank details block
+    const bank = invoice.bankAccountDetails || {};
     const bankY = startY + 90;
     doc.rect(36, bankY - 6, 515, 70).strokeColor('#ccc').stroke();
     doc.fontSize(11).font('Helvetica-Bold').text('Bank Details', 40, bankY - 2);
@@ -790,7 +779,7 @@ exports.getInvoicePDF = async (req, res) => {
     doc.end();
 
   } catch (err) {
-    console.error('PDF generation error', err);
+    logger.error('PDF generation error', err);
     res.status(500).json({ error: 'Failed to generate PDF' });
   }
 };
@@ -808,7 +797,7 @@ exports.downloadInvoicePdf = async (req, res) => {
     if (invoice.clientId) {
       client = await Client.findById(invoice.clientId).lean();
     }
-    console.log("fetched client for pdf : ", client, " invoice : ", invoice, " logoPath : ", logoPath);
+    logger.debug("fetched client for pdf : ", client, " invoice : ", invoice, " logoPath : ", logoPath);
 
     // --- IMPORTANT: local file path to the uploaded logo (from conversation) ---
     // const logoPath = '/mnt/data/e73f2cb8-6e59-4794-8db1-5da185f2001a.png';
@@ -816,18 +805,6 @@ exports.downloadInvoicePdf = async (req, res) => {
     // const logoPath = path.resolve(__dirname, '../public/logo.png');
 
     // Build a simple HTML template (hardcode company details — edit later)
-    const company = {
-      name: 'Witarist IT Services Pvt. Ltd.',
-      addressLine1: 'Office No. - 62, Plot No. - 31 G/F, Durga Park Dallupura',
-      city: 'New Delhi - 110096',
-      gstin: '07AACCW5373R1ZJ',
-      bankName: 'IDFC Bank',
-      bankBranch: 'MG Road Branch',
-      bankAccount: '676757878677',
-      bankIfsc: 'IDFC0001234'
-    };
-
-    // You can hardcode or derive more values here. For now fill blanks with invoice fields.
     const html = `
       <!doctype html>
         <html lang="en">
@@ -1165,7 +1142,7 @@ exports.downloadInvoicePdf = async (req, res) => {
     return res.send(pdfBuffer);
 
   } catch (err) {
-    console.error('PDF generation error', err);
+    logger.error('PDF generation error', err);
     return res.status(500).json({ error: 'Failed to generate PDF' });
   }
 };
@@ -1181,7 +1158,7 @@ exports.generateInvoicePDF = async (req, res) => {
     if (invoice.clientId) {
       client = await Client.findById(invoice.clientId).lean();
     }
-    console.log("fetched client for pdf : ", client, " invoice : ", invoice, " logoPath : ", logoPath);
+    logger.debug("fetched client for pdf : ", client, " invoice : ", invoice, " logoPath : ", logoPath);
 
     const doc = new PDFDocument({ 
             size: 'A4', 
@@ -1203,7 +1180,7 @@ exports.generateInvoicePDF = async (req, res) => {
         doc.end();
 
     } catch (error) {
-      console.error('Error generating invoice PDF:', error);
+      logger.error('Error generating invoice PDF:', error);
       return res.status(500).json({ error: 'Server error generating invoice PDF' });
     }
 };
